@@ -1,0 +1,17 @@
+{
+  "name": "open-zoo-online",
+  "version": "1.0.0",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "node scripts/build.mjs",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "cloudflare:dev": "npm run build && npx wrangler@latest dev",
+    "cloudflare:deploy": "npm run build && npx wrangler@latest deploy"
+  }
+}

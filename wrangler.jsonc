@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "open-zoo-online",
+  "main": "dist/server/index.js",
+  "compatibility_date": "2026-07-16",
+  "assets": {
+    "directory": "dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "open-zoo-online-db",
+      "database_id": "b9b0cbd0-d61b-4ef0-99fd-fbeef681831c"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
