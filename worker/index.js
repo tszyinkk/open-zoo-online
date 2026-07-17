@@ -178,6 +178,7 @@ function basePlayer(player, seedText, marineWorlds, deck) {
     actionOrder: ["animals", ...otherActions], actionUpgrades: [], variants: marineWorlds ? actionVariants(seedText, player.seat) : {},
     money: 25, appeal: player.seat, conservation: 0, reputation: 1, xTokens: 1,
     workers: 1, usedWorkers: 0, upgradeCredits: 0, milestones: [], handLimit: 3,
+    harborUsedTurn: -1,
     structures: [], playedAnimals: [], sponsors: [], tags: {},
     partnerZoos: [], universities: [], supportedProjects: [], endgames: endgameDeck.slice(0, 2),
   };
@@ -190,10 +191,10 @@ function createGame(players, marineWorlds, code) {
   for (const player of players) playerState[player.id] = basePlayer(player, seedText, marineWorlds, deck);
   const shuffledProjects = shuffle(projectIds(marineWorlds), `${seedText}:projects`);
   const game = {
-    version: 2, phase: "setup", seed: seedText, round: 1, currentPlayerId: null, firstPlayerId: players[0].id,
+    version: 3, phase: "setup", seed: seedText, round: 1, turn: 0, currentPlayerId: null, firstPlayerId: players[0].id,
     breakProgress: 0, breakTarget: BREAK_TARGETS[players.length] ?? 12,
     deck, discard: [], market: [],
-    projects: shuffledProjects.slice(0, 3).map((cardId) => ({ cardId, claims: [] })),
+    projects: shuffledProjects.slice(0, players.length === 4 ? 4 : 3).map((cardId) => ({ cardId, claims: [], base: true })),
     association: { occupied: [], marineUniversityAvailable: marineWorlds },
     playerState, finale: null, finalScores: null,
     log: ["遊戲設定開始：每位園長揀 4 張起手牌及動物園地圖。"],
@@ -221,23 +222,57 @@ function useActionCard(player, actionId, extraX = 0) {
   player.actionOrder.unshift(actionId);
 }
 
-function applyAbility(game, player, card, multiplier = 1) {
-  const value = (card.abilityValue ?? 1) * multiplier;
-  switch (card.ability) {
-    case "money": player.money += value * 2; break;
-    case "draw": player.hand.push(...takeCards(game, value)); break;
-    case "appeal": player.appeal += value; break;
-    case "reputation": player.reputation = Math.min(15, player.reputation + value); break;
-    case "x": player.xTokens = Math.min(5, player.xTokens + value); break;
-    case "break": game.breakProgress += value; break;
-    case "conservation": player.conservation += Math.min(2, value); break;
+function moveActionCard(player, actionId, slot) {
+  const index = player.actionOrder.indexOf(actionId);
+  if (index < 0) return;
+  player.actionOrder.splice(index, 1);
+  player.actionOrder.splice(Math.max(0, Math.min(4, slot - 1)), 0, actionId);
+}
+
+function keywordValue(ability, fallback = 1) {
+  return Number.isFinite(Number(ability?.value)) && String(ability?.value) !== "" ? Number(ability.value) : fallback;
+}
+
+function applyKeyword(game, player, ability, multiplier = 1) {
+  const value = keywordValue(ability) * multiplier;
+  switch (ability?.key) {
+    case "SPRINT": player.hand.push(...takeCards(game, value)); break;
+    case "HUNTER": {
+      const revealed = takeCards(game, value);
+      const keptIndex = revealed.findIndex((id) => CARD_BY_ID[id]?.type === "animal");
+      if (keptIndex >= 0) player.hand.push(revealed.splice(keptIndex, 1)[0]);
+      game.discard.push(...revealed);
+      break;
+    }
+    case "PACK": player.appeal += player.tags["肉食"] ?? 0; break;
+    case "JUMPING": game.breakProgress += value; player.money += value; break;
+    case "INVENTIVE": player.xTokens = Math.min(5, player.xTokens + value); break;
+    case "INVENTIVE_BEAR": player.xTokens = Math.min(5, player.xTokens + Math.min(3, player.tags["熊"] ?? 0)); break;
+    case "INVENTIVE_PRIMARY": player.xTokens = Math.min(5, player.xTokens + Math.min(3, Math.ceil((player.tags["靈長"] ?? 0) / 2))); break;
+    case "FULL_THROATED": player.workers = Math.min(4, player.workers + 1); break;
+    case "PERCEPTION_2": player.hand.push(...takeCards(game, 1)); break;
+    case "PERCEPTION_4": player.hand.push(...takeCards(game, 2)); break;
+    case "REPUTATION": player.reputation = Math.min(15, player.reputation + value); break;
+    case "CONSERVATION_POINT": player.conservation += value; break;
+    case "APPEAL": player.appeal += value; break;
+    case "REEF_MONEY": player.money += value; break;
+    case "BOOST_ASSOCIATION": moveActionCard(player, "association", 5); break;
+    case "BOOST_BUILDING": moveActionCard(player, "build", 5); break;
+    case "BOOST_CARD": moveActionCard(player, "cards", 5); break;
+    case "BOOST_SPONSORS": moveActionCard(player, "sponsors", 5); break;
+    case "BOOST_ANIMAL": moveActionCard(player, "animals", 5); break;
+    case "CLEVER": moveActionCard(player, player.actionOrder[0], 1); break;
     default: break;
   }
 }
 
+function applyCardAbilities(game, player, card, multiplier = 1, reefOnly = false) {
+  const abilities = reefOnly ? card.reefEffects ?? [] : card.abilities ?? [];
+  for (const ability of abilities) applyKeyword(game, player, ability, multiplier);
+}
+
 function addTags(player, card) {
-  for (const tag of new Set(card.tags ?? [])) player.tags[tag] = (player.tags[tag] ?? 0) + 1;
-  if (card.type === "sponsor") player.tags["科研"] = (player.tags["科研"] ?? 0) + (card.tags?.includes("科研") ? 1 : 0);
+  for (const tag of card.tags ?? []) player.tags[tag] = (player.tags[tag] ?? 0) + 1;
 }
 
 function syncMilestones(player) {
@@ -273,43 +308,132 @@ function structureDefinition(type) {
   return entries[type] ?? null;
 }
 
-function footprint(cell, size) {
-  const start = intClamp(cell, 0, 32);
-  return Array.from({ length: size }, (_, index) => start + index).filter((value) => value <= 32);
+const MAP_ROW_LENGTHS = [9, 10, 9, 10, 9, 10, 9, 10, 9, 10];
+const MAP_CELLS = MAP_ROW_LENGTHS.flatMap((amount, row) => {
+  const offset = 10 - amount;
+  return Array.from({ length: amount }, (_, column) => ({ row, x: offset + column * 2 }));
+});
+
+function cellNeighbors(cell) {
+  const origin = MAP_CELLS[cell];
+  if (!origin) return [];
+  return MAP_CELLS.flatMap((candidate, index) => {
+    const sameRow = candidate.row === origin.row && Math.abs(candidate.x - origin.x) === 2;
+    const nextRow = Math.abs(candidate.row - origin.row) === 1 && Math.abs(candidate.x - origin.x) === 1;
+    return sameRow || nextRow ? [index] : [];
+  });
+}
+
+function footprint(cell, size, blocked = new Set()) {
+  const start = intClamp(cell, 0, MAP_CELLS.length - 1);
+  if (blocked.has(start)) return [];
+  const chosen = [];
+  const queue = [start];
+  const seen = new Set(queue);
+  while (queue.length && chosen.length < size) {
+    const current = queue.shift();
+    if (!blocked.has(current)) chosen.push(current);
+    for (const neighbor of cellNeighbors(current)) {
+      if (!seen.has(neighbor)) { seen.add(neighbor); queue.push(neighbor); }
+    }
+  }
+  return chosen;
 }
 
 function occupiedCells(player) {
   return new Set(player.structures.flatMap((structure) => structure.cells));
 }
 
+function mapFor(player) { return MAPS.find((entry) => entry.id === player.mapId) ?? MAPS[0]; }
+
+function mapFeatureConnected(player, map = mapFor(player)) {
+  const cell = map.ability?.cell;
+  return Number.isInteger(cell) && cellNeighbors(cell).some((neighbor) => occupiedCells(player).has(neighbor));
+}
+
+function touchesRequiredTerrain(player, structure, card) {
+  const map = MAPS.find((entry) => entry.id === player.mapId) ?? MAPS[0];
+  const adjacent = new Set(structure.cells.flatMap(cellNeighbors));
+  const water = map.water.filter((cell) => adjacent.has(cell)).length;
+  const rock = map.rock.filter((cell) => adjacent.has(cell)).length;
+  return water >= (card.water ?? 0) && rock >= (card.rock ?? 0);
+}
+
+function specialCapacity(card, type, fallback) {
+  return card.specialEnclosures?.find((entry) => entry.type === type)?.capacity ?? fallback;
+}
+
 function findHabitat(player, card) {
   if (card.aquarium) {
-    return player.structures.find((structure) => ["aquariumSmall", "aquariumLarge"].includes(structure.type) && structure.capacity - structure.used >= card.aquarium);
+    return player.structures.find((structure) => ["aquariumSmall", "aquariumLarge"].includes(structure.type) && structure.capacity - structure.used >= card.aquarium && touchesRequiredTerrain(player, structure, card));
   }
-  if (card.kind === "家畜") {
-    const petting = player.structures.find((structure) => structure.type === "petting" && structure.capacity - structure.used >= 1);
+  if (card.kind === "萌寵" || card.kind === "家畜") {
+    const needed = specialCapacity(card, "PettingZoo", 1);
+    const petting = player.structures.find((structure) => structure.type === "petting" && structure.capacity - structure.used >= needed && touchesRequiredTerrain(player, structure, card));
     if (petting) return petting;
   }
   if (card.kind === "爬蟲") {
-    const reptile = player.structures.find((structure) => structure.type === "reptile" && structure.capacity - structure.used >= Math.min(card.size, 3));
+    const needed = specialCapacity(card, "ReptileHouse", Math.min(card.size, 3));
+    const reptile = player.structures.find((structure) => structure.type === "reptile" && structure.capacity - structure.used >= needed && touchesRequiredTerrain(player, structure, card));
     if (reptile) return reptile;
   }
   if (card.kind === "鳥類") {
-    const aviary = player.structures.find((structure) => structure.type === "aviary" && structure.capacity - structure.used >= Math.min(card.size, 3));
+    const needed = specialCapacity(card, "LargeBirdAviary", Math.min(card.size, 3));
+    const aviary = player.structures.find((structure) => structure.type === "aviary" && structure.capacity - structure.used >= needed && touchesRequiredTerrain(player, structure, card));
     if (aviary) return aviary;
   }
-  return player.structures.find((structure) => structure.type === "enclosure" && !structure.occupied && structure.capacity >= card.size);
+  if (card.standardEnclosure === false) return null;
+  const map = mapFor(player);
+  return player.structures.find((structure) => {
+    if (structure.type !== "enclosure" || structure.occupied || !touchesRequiredTerrain(player, structure, card)) return false;
+    const outdoorBonus = map.ability?.key === "OUTDOOR_AREAS" && structure.cells.some((cell) => cellNeighbors(cell).includes(map.ability.cell)) ? 2 : 0;
+    return structure.capacity + outdoorBonus >= card.size;
+  });
 }
 
 function occupyHabitat(structure, card) {
   if (structure.type === "enclosure") structure.occupied = true;
-  else structure.used += card.aquarium || Math.min(card.size, 3);
+  else if (["aquariumSmall", "aquariumLarge"].includes(structure.type)) structure.used += card.aquarium;
+  else if (structure.type === "petting") structure.used += specialCapacity(card, "PettingZoo", 1);
+  else if (structure.type === "reptile") structure.used += specialCapacity(card, "ReptileHouse", Math.min(card.size, 3));
+  else if (structure.type === "aviary") structure.used += specialCapacity(card, "LargeBirdAviary", Math.min(card.size, 3));
+}
+
+function validateCardRequirements(player, card, ignored = 0) {
+  const counts = {};
+  for (const requirement of card.requirements ?? []) counts[requirement] = (counts[requirement] ?? 0) + 1;
+  const actionRequirements = { "動物 I": "animals", "動物 II": "animals", "建造 I": "build", "建造 II": "build", "卡牌 I": "cards", "卡牌 II": "cards", "贊助 I": "sponsors", "贊助 II": "sponsors", "協會 I": "association", "協會 II": "association" };
+  for (const [requirement, amount] of Object.entries(counts)) {
+    if (actionRequirements[requirement]) {
+      const needsUpgrade = requirement.endsWith("II");
+      if (needsUpgrade && !player.actionUpgrades.includes(actionRequirements[requirement])) {
+        if (ignored > 0) { ignored -= 1; continue; }
+        throw new Error(`需要已升級嘅${requirement.replace(" II", "")}行動卡`);
+      }
+      continue;
+    }
+    if (requirement === "合作動物園" && player.partnerZoos.length < amount) {
+      if (ignored > 0) { ignored -= 1; continue; }
+      throw new Error(`需要 ${amount} 個合作動物園`);
+    }
+    if (requirement === "大學" && player.universities.length < amount) {
+      if (ignored > 0) { ignored -= 1; continue; }
+      throw new Error(`需要 ${amount} 間合作大學`);
+    }
+    if (["水域", "岩石", "聲譽", "魅力"].includes(requirement)) continue;
+    if ((player.tags[requirement] ?? 0) < amount) {
+      if (ignored > 0) { ignored -= 1; continue; }
+      throw new Error(`需要 ${amount} 個「${requirement}」圖標`);
+    }
+  }
 }
 
 function playAnimal(game, player, cardId, discount = 0) {
   const card = CARD_BY_ID[cardId];
   if (!card || card.type !== "animal" || !player.hand.includes(cardId)) throw new Error("手上冇呢張動物牌");
   if (card.reputation > player.reputation) throw new Error(`需要聲譽 ${card.reputation}`);
+  const map = mapFor(player);
+  validateCardRequirements(player, card, map.ability?.key === "RESEARCH_INSTITUTE" && mapFeatureConnected(player, map) ? 1 : 0);
   const habitat = findHabitat(player, card);
   if (!habitat) throw new Error(card.aquarium ? "要先建造有足夠空位嘅水族館" : "冇合適嘅空圍欄");
   const partnerDiscount = player.partnerZoos.includes(card.continent) ? 3 : 0;
@@ -321,11 +445,12 @@ function playAnimal(game, player, cardId, discount = 0) {
   player.appeal += card.appeal;
   player.conservation += card.conservation;
   occupyHabitat(habitat, card);
+  if (map.ability?.key === "OBSERVATION_TOWER" && habitat.type === "enclosure" && habitat.cells.some((cell) => cellNeighbors(cell).includes(map.ability.cell))) player.appeal += 2;
   addTags(player, card);
-  if (!card.reef) applyAbility(game, player, card);
+  if (!card.reef) applyCardAbilities(game, player, card);
   if (card.reef) {
     const reefCards = player.playedAnimals.map((id) => CARD_BY_ID[id]).filter((entry) => entry?.reef);
-    for (const reef of reefCards) applyAbility(game, player, reef);
+    for (const reef of reefCards) applyCardAbilities(game, player, reef, 1, true);
   }
   syncMilestones(player);
   return card;
@@ -354,6 +479,42 @@ function cardsAction(game, player, command, strength) {
   return `抽咗 ${cards.length} 張牌`;
 }
 
+function takeFirstCardOfType(game, type) {
+  const revealed = [];
+  while (game.deck.length) {
+    const cardId = drawFromDeck(game);
+    if (!cardId) break;
+    if (CARD_BY_ID[cardId]?.type === type) {
+      game.discard.push(...revealed);
+      return cardId;
+    }
+    revealed.push(cardId);
+  }
+  game.discard.push(...revealed);
+  return null;
+}
+
+function applyPlacementBonus(game, player, bonus) {
+  const money = /^\$(\d+)$/.exec(bonus ?? "");
+  if (money) { player.money += Number(money[1]); return bonus; }
+  if (bonus === "X") { player.xTokens = Math.min(5, player.xTokens + 1); return "X 標記"; }
+  if (bonus === "聲譽") { player.reputation = Math.min(15, player.reputation + 1); return "1 聲譽"; }
+  if (bonus === "保育") { player.conservation += 1; return "1 保育分"; }
+  if (bonus === "抽牌") { const cardId = drawFromDeck(game); if (cardId) player.hand.push(cardId); return "1 張牌"; }
+  if (bonus === "協會員") { player.workers = Math.min(4, player.workers + 1); return "1 名協會員"; }
+  if (bonus?.endsWith(" II")) {
+    const action = { "建造 II": "build", "卡牌 II": "cards", "動物 II": "animals", "贊助 II": "sponsors", "協會 II": "association" }[bonus];
+    if (action && !player.actionUpgrades.includes(action)) player.actionUpgrades.push(action);
+    return bonus;
+  }
+  if (bonus === "H") {
+    const cardId = takeFirstCardOfType(game, "sponsor");
+    if (cardId) player.hand.push(cardId);
+    return "1 張贊助牌";
+  }
+  return "";
+}
+
 function buildAction(game, player, command, strength, marineWorlds) {
   const definition = structureDefinition(command.structure);
   if (!definition) throw new Error("請揀要建造嘅設施");
@@ -363,19 +524,20 @@ function buildAction(game, player, command, strength, marineWorlds) {
   const bonus = player.variants.build ? 1 : 0;
   if (definition.size > strength + bonus) throw new Error(`呢個設施需要建造強度 ${definition.size}`);
   if (player.money < definition.cost) throw new Error(`需要 $${definition.cost}`);
-  const cells = footprint(command.cell, definition.size);
-  if (cells.length !== definition.size || cells.some((cell) => occupiedCells(player).has(cell))) throw new Error("呢個位置放唔落設施");
-  const map = MAPS.find((entry) => entry.id === player.mapId) ?? MAPS[0];
-  const terrain = new Set([...map.water, ...map.rock]);
-  if (cells.some((cell) => terrain.has(cell))) throw new Error("水域同岩石格唔可以直接建造");
+  const map = mapFor(player);
+  const terrain = new Set([...map.water, ...map.rock, ...Object.keys(map.features ?? {}).map(Number)]);
+  const blocked = new Set([...occupiedCells(player), ...terrain]);
+  const cells = footprint(command.cell, definition.size, blocked);
+  if (cells.length !== definition.size) throw new Error("呢個位置放唔落設施");
   if (definition.marine) {
-    const adjacent = cells.some((cell) => map.water.some((water) => [1, 8, 9].some((offset) => Math.abs(water - cell) === offset)));
+    const adjacent = cells.some((cell) => cellNeighbors(cell).some((neighbor) => map.water.includes(neighbor)));
     if (!adjacent) throw new Error("水族館必須建喺至少一格水域旁邊");
   }
   player.money -= definition.cost;
   player.structures.push({ id: crypto.randomUUID(), ...definition, cells, used: 0, occupied: false });
   if (definition.type === "pavilion") player.appeal += 1;
-  return `建造咗${definition.label}`;
+  const rewards = cells.map((cell) => applyPlacementBonus(game, player, map.bonuses?.[cell])).filter(Boolean);
+  return `建造咗${definition.label}${rewards.length ? `，取得${rewards.join("、")}` : ""}`;
 }
 
 function animalsAction(game, player, command, strength) {
@@ -395,13 +557,18 @@ function sponsorsAction(game, player, command, strength) {
   }
   const card = CARD_BY_ID[command.cardId];
   if (!card || card.type !== "sponsor" || !player.hand.includes(command.cardId)) throw new Error("手上冇呢張贊助牌");
-  if (card.level > strength) throw new Error(`呢張牌需要贊助強度 ${card.level}`);
+  const map = mapFor(player);
+  const hollywoodReady = map.ability?.key === "HOLLYWOOD_HILLS" && map.ability.cells.every((cell) => occupiedCells(player).has(cell));
+  const requiredStrength = Math.max(1, card.level - (hollywoodReady ? 1 : 0));
+  if (requiredStrength > strength) throw new Error(`呢張牌需要贊助強度 ${requiredStrength}`);
+  validateCardRequirements(player, card);
   player.hand.splice(player.hand.indexOf(command.cardId), 1);
   player.sponsors.push(command.cardId);
   player.appeal += card.appeal;
   if (player.variants.sponsors) player.money += 1;
   addTags(player, card);
-  applyAbility(game, player, card);
+  // Sponsor cards are driven by their individual immediate/income/passive timing windows.
+  // Unimplemented sponsor text is never replaced with a random generic reward.
   syncMilestones(player);
   return `打出贊助牌「${card.zh}」`;
 }
@@ -443,8 +610,23 @@ function associationAction(game, player, command, strength, marineWorlds) {
     }
   }
   if (task === "project") {
-    const project = game.projects.find((entry) => entry.cardId === command.projectId);
-    if (!project || project.claims.some((claim) => claim.playerId === player.id)) throw new Error("呢個保育計劃不可再支持");
+    let project = game.projects.find((entry) => entry.cardId === command.projectId);
+    if (!project) {
+      const handIndex = player.hand.indexOf(command.projectId);
+      const handCard = CARD_BY_ID[command.projectId];
+      if (handIndex < 0 || !handCard || handCard.type !== "project" || !handCard.thresholds?.length) throw new Error("手上冇可立即支持嘅保育計劃");
+      player.hand.splice(handIndex, 1);
+      project = { cardId: handCard.rawId, claims: [], base: false };
+      const maximum = Object.keys(game.playerState).length;
+      const placed = game.projects.filter((entry) => entry.base === false);
+      if (placed.length >= maximum) {
+        const oldestIndex = game.projects.findIndex((entry) => entry.base === false);
+        const [discarded] = game.projects.splice(oldestIndex, 1);
+        if (discarded) game.discard.push(discarded.cardId);
+      }
+      game.projects.push(project);
+    }
+    if (project.claims.some((claim) => claim.playerId === player.id)) throw new Error("呢個保育計劃不可再支持");
     const card = CARD_BY_ID[project.cardId];
     const progress = projectProgress(card, player);
     let level = -1;
@@ -477,7 +659,12 @@ function discardMarketBottom(game, amount) {
 
 function incomeFor(player) {
   const appealIncome = 5 + Math.floor(player.appeal / 5) * 2;
-  const kioskIncome = player.structures.filter((structure) => structure.type === "kiosk").length * 2;
+  const kiosks = player.structures.filter((structure) => structure.type === "kiosk").length;
+  const map = mapFor(player);
+  const covered = occupiedCells(player);
+  const restaurantIncome = map.ability?.key === "PARK_RESTAURANT" ? cellNeighbors(map.ability.cell).filter((cell) => covered.has(cell)).length : 0;
+  const iceCreamIncome = map.ability?.key === "ICE_CREAM_PARLORS" && map.ability.cells.every((cell) => covered.has(cell)) ? kiosks : 0;
+  const kioskIncome = kiosks * 2 + restaurantIncome + iceCreamIncome;
   const sponsorIncome = player.sponsors.reduce((total, id) => total + (CARD_BY_ID[id]?.income ?? 0), 0);
   return appealIncome + kioskIncome + sponsorIncome;
 }
@@ -577,6 +764,7 @@ function completeTurn(game, players, viewerId) {
     finishGame(game, players);
     return;
   }
+  game.turn = (game.turn ?? 0) + 1;
   game.currentPlayerId = nextPlayer(game, players, viewerId);
 }
 
@@ -590,6 +778,10 @@ function applySetup(game, players, viewer, command) {
   game.discard.push(...player.initialHand.filter((id) => !keep.includes(id)));
   player.initialHand = [];
   player.mapId = mapId;
+  if (mapId === "A" && !player.structures.length) {
+    const definition = structureDefinition("enclosure3");
+    player.structures.push({ id: crypto.randomUUID(), ...definition, cells: [76, 85, 86], used: 0, occupied: false, starting: true });
+  }
   player.ready = true;
   addLog(game, `${viewer.name} 已經揀好地圖同起手牌。`);
   if (players.every((entry) => game.playerState[entry.id].ready)) {
@@ -608,6 +800,19 @@ function applyUpgrade(game, viewer, command) {
   addLog(game, `${viewer.name} 升級咗${ACTIONS.find((entry) => entry.id === command.actionId)?.name}行動卡。`);
 }
 
+function applyMapAbility(game, viewer, command) {
+  const player = game.playerState[viewer.id];
+  const map = mapFor(player);
+  if (map.ability?.key !== "COMMERCIAL_HARBOR" || !mapFeatureConnected(player, map)) throw new Error("商業港口尚未連接");
+  if (player.harborUsedTurn === (game.turn ?? 0)) throw new Error("今個回合已經用過商業港口");
+  if (!player.hand.includes(command.cardId)) throw new Error("請揀一張手牌棄除");
+  player.hand.splice(player.hand.indexOf(command.cardId), 1);
+  game.discard.push(command.cardId);
+  player.money += 3;
+  player.harborUsedTurn = game.turn ?? 0;
+  addLog(game, `${viewer.name} 使用商業港口，棄除 1 張手牌並取得 $3。`);
+}
+
 function applyGameCommand(game, players, viewer, command, marineWorlds) {
   if (command.type === "setup") {
     if (game.phase !== "setup") throw new Error("而家唔係設定階段");
@@ -621,6 +826,10 @@ function applyGameCommand(game, players, viewer, command, marineWorlds) {
   }
   if (game.phase !== "playing") throw new Error(game.phase === "finished" ? "遊戲已完結" : "遊戲未開始");
   if (game.currentPlayerId !== viewer.id) throw new Error("未到你行動");
+  if (command.type === "mapAbility") {
+    applyMapAbility(game, viewer, command);
+    return;
+  }
   if (!ACTION_IDS.includes(command.type)) throw new Error("無效行動");
   const player = game.playerState[viewer.id];
   const extraX = intClamp(command.x, 0, player.xTokens);
