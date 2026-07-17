@@ -68,6 +68,12 @@ p, h1, h2, h3 { margin-top: 0; }
 .secondary-button:hover:not(:disabled) { background: #cbd9c2; }
 .privacy-note, .lobby-note { position: relative; margin: 14px 0 0; color: #89938d; font-size: 11px; line-height: 1.5; text-align: center; }
 .form-error { position: relative; margin: 12px 0 0; padding: 10px 12px; color: #8e3e31; background: #fff0ec; border-radius: 4px; font-size: 12px; }
+.invite-panel .panel-label { margin-bottom: 18px; }
+.invite-code-card { position: relative; margin-bottom: 22px; padding: 18px; border: 1px solid #c9d7cb; border-radius: 6px; background: #edf4ec; text-align: center; }
+.invite-code-card small { display: block; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.invite-code-card strong { display: block; margin: 7px 0; color: var(--forest); font-family: ui-monospace, SFMono-Regular, monospace; font-size: 30px; letter-spacing: .17em; }
+.invite-code-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.invite-cancel { position: relative; width: 100%; margin-top: 10px; }
 
 .feature-deck { width: min(1180px, calc(100% - 48px)); margin: 0 auto 80px; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .feature-deck article { min-height: 210px; padding: 34px 32px; border-right: 1px solid var(--line); }
