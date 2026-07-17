@@ -2,7 +2,7 @@ const app = document.querySelector("#app");
 const state = {
   name: "", joinCode: "", marineWorlds: true, activeCode: "", token: "",
   room: null, catalog: null, cardMap: {}, busy: "", error: "", copied: false, timer: null,
-  setupKeep: new Set(), setupMap: "A", modal: null, detailCard: null, logOpen: false,
+  setupKeep: new Set(), setupMap: "A", modal: null, detailCard: null, logOpen: false, inviteMode: false,
 };
 
 function esc(value) {
@@ -12,8 +12,21 @@ function esc(value) {
 async function api(url, options = {}) {
   const response = await fetch(url, { ...options, headers: { "content-type": "application/json", ...(options.headers ?? {}) } });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error ?? "請稍後再試");
+  if (!response.ok) {
+    const error = new Error(data.error ?? "請稍後再試");
+    error.status = response.status;
+    throw error;
+  }
   return data;
+}
+
+function roomCodeFromInput(value) {
+  const text = String(value ?? "").trim();
+  try {
+    const room = new URL(text, location.origin).searchParams.get("room");
+    if (room) return room.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+  } catch {}
+  return text.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
 }
 
 async function loadCatalog() {
@@ -74,17 +87,24 @@ function animalGlyph(kind) {
 }
 
 function renderLanding() {
+  const invited = state.inviteMode && state.joinCode.length === 6;
+  const entryPanel = invited ? `<div class="entry-panel invite-panel"><div class="panel-label"><span></span> 加入私人房間</div>
+        <div class="invite-code-card"><small>朋友邀請你加入</small><strong>${esc(state.joinCode)}</strong><p>輸入你嘅園長名稱，就會加入現有房間。</p></div>
+        <form id="join-form"><label for="host-name">你嘅園長名稱</label><input id="host-name" maxlength="18" placeholder="例如：Leo" autocomplete="nickname" value="${esc(state.name)}">
+          <button class="primary-button" ${state.busy || !state.name.trim() ? "disabled" : ""}>${state.busy === "join" ? "加入緊房間…" : `加入房間 ${esc(state.joinCode)}`}<span>→</span></button></form>
+        ${state.error ? `<p class="form-error" role="alert">${esc(state.error)}</p>` : ""}
+        <button class="invite-cancel text-button" id="cancel-invite" type="button">唔加入，返回首頁</button>
+        <p class="privacy-note">毋須註冊；加入朋友房間唔計每日建房上限。</p></div>` : `<div class="entry-panel"><div class="panel-label"><span></span> 建立遊戲</div>
+        <form id="create-form"><label for="host-name">你嘅園長名稱</label><input id="host-name" maxlength="18" placeholder="例如：Leo" autocomplete="nickname" value="${esc(state.name)}">
+          <label class="switch-row"><span><strong>加入 Marine Worlds</strong><small>水族館、礁居者、浪花、新大學、變體行動卡</small></span><input id="marine-toggle" type="checkbox" ${state.marineWorlds ? "checked" : ""}></label>
+          <button class="primary-button" ${state.busy || !state.name.trim() ? "disabled" : ""}>${state.busy === "create" ? "建立緊房間…" : "建立私人房間"}<span>→</span></button></form>
+        <div class="or-divider"><span>或者加入朋友</span></div><form class="join-form" id="join-form"><input id="join-code" aria-label="六位房間代碼或邀請連結" placeholder="房間代碼／邀請連結" value="${esc(state.joinCode)}"><button class="secondary-button" ${state.busy || !state.name.trim() || state.joinCode.length < 6 ? "disabled" : ""}>${state.busy === "join" ? "加入緊…" : "加入"}</button></form>
+        ${state.error ? `<p class="form-error" role="alert">${esc(state.error)}</p>` : ""}<p class="privacy-note">毋須註冊。每個網絡每日最多開 5 間房；加入朋友房間不限。</p></div>`;
   app.innerHTML = `<main class="landing-shell">
     <header class="topbar"><a class="brand" href="#top"><span class="brand-mark">OZ</span><span>OPEN ZOO <small>ONLINE</small></span></a><span class="build-badge">完整遊戲流程 · v1.0</span></header>
     <section class="hero" id="top">
       <div class="hero-copy"><p class="eyebrow">免費 · 開源 · 2–4 人即時連線</p><h1>一張連結，<br>開一間動物園。</h1><p class="hero-lede">繁體中文、基本版連 Marine Worlds。由揀起手牌、建造、動物、協會、贊助、休息收入，到兩條計分軌相遇，都喺瀏覽器完成。</p><div class="promise-row"><span><b>4</b> 位園長</span><span><b>296</b> 張牌索引</span><span><b>0</b> 蚊月費</span></div></div>
-      <div class="entry-panel"><div class="panel-label"><span></span> 建立遊戲</div>
-        <form id="create-form"><label for="host-name">你嘅園長名稱</label><input id="host-name" maxlength="18" placeholder="例如：Leo" autocomplete="nickname" value="${esc(state.name)}">
-          <label class="switch-row"><span><strong>加入 Marine Worlds</strong><small>水族館、礁居者、浪花、新大學、變體行動卡</small></span><input id="marine-toggle" type="checkbox" ${state.marineWorlds ? "checked" : ""}></label>
-          <button class="primary-button" ${state.busy || !state.name.trim() ? "disabled" : ""}>${state.busy === "create" ? "建立緊房間…" : "建立私人房間"}<span>→</span></button></form>
-        <div class="or-divider"><span>或者加入朋友</span></div><form class="join-form" id="join-form"><input id="join-code" aria-label="六位房間代碼" maxlength="6" placeholder="房間代碼" value="${esc(state.joinCode)}"><button class="secondary-button" ${state.busy || !state.name.trim() || state.joinCode.length < 6 ? "disabled" : ""}>${state.busy === "join" ? "加入緊…" : "加入"}</button></form>
-        ${state.error ? `<p class="form-error" role="alert">${esc(state.error)}</p>` : ""}<p class="privacy-note">毋須註冊。每個網絡每日最多開 5 間房；加入朋友房間不限。</p>
-      </div>
+      ${entryPanel}
     </section>
     <section class="feature-deck"><article><span>01</span><h2>完整一局</h2><p>私人手牌、行動強度、圍欄容量、收入、保育計劃、最後一輪及終局排名。</p></article><article><span>02</span><h2>海洋世界</h2><p>大小水族館、海洋動物容量、礁居者連鎖、浪花展列及專科大學。</p></article><article><span>03</span><h2>伺服器判定</h2><p>每一步由伺服器驗證同保存；關頁後用同一部裝置及邀請連結重新入房。</p></article></section>
     <section class="disclaimer"><strong>非官方開源愛好者版本</strong><p>介面及圖形全部重新設計，冇使用原版卡圖或商標。卡名只作辨認；能力資料採用可調校規則模型，方便之後逐張校正。</p></section>
@@ -93,10 +113,15 @@ function renderLanding() {
   const name = document.querySelector("#host-name");
   const code = document.querySelector("#join-code");
   name.addEventListener("input", (event) => { state.name = event.target.value; updateEntryButtons(); });
-  code.addEventListener("input", (event) => { event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); state.joinCode = event.target.value; updateEntryButtons(); });
-  document.querySelector("#marine-toggle").addEventListener("change", (event) => { state.marineWorlds = event.target.checked; });
-  document.querySelector("#create-form").addEventListener("submit", createRoom);
+  code?.addEventListener("input", (event) => { event.target.value = roomCodeFromInput(event.target.value); state.joinCode = event.target.value; updateEntryButtons(); });
+  document.querySelector("#marine-toggle")?.addEventListener("change", (event) => { state.marineWorlds = event.target.checked; });
+  document.querySelector("#create-form")?.addEventListener("submit", createRoom);
   document.querySelector("#join-form").addEventListener("submit", joinRoom);
+  document.querySelector("#cancel-invite")?.addEventListener("click", () => {
+    history.replaceState({}, "", "/");
+    Object.assign(state, { inviteMode: false, joinCode: "", error: "", busy: "" });
+    renderLanding();
+  });
 }
 
 function updateEntryButtons() {
@@ -117,7 +142,8 @@ async function createRoom(event) {
 async function joinRoom(event) {
   event.preventDefault(); state.busy = "join"; state.error = ""; renderLanding();
   try {
-    const code = state.joinCode.toUpperCase();
+    const code = roomCodeFromInput(state.joinCode);
+    if (code.length !== 6) throw new Error("請輸入六位房間代碼或完整邀請連結");
     const result = await api(`/api/rooms/${code}/join`, { method: "POST", body: JSON.stringify({ name: state.name }) });
     enterRoom(result.code, result.playerToken);
   } catch (error) { state.busy = ""; state.error = error.message; renderLanding(); }
@@ -126,7 +152,7 @@ async function joinRoom(event) {
 function enterRoom(code, token) {
   localStorage.setItem(`open-zoo:${code}`, token);
   history.replaceState({}, "", `/?room=${code}`);
-  Object.assign(state, { activeCode: code, token, room: null, busy: "", error: "", modal: null, detailCard: null });
+  Object.assign(state, { activeCode: code, token, room: null, busy: "", error: "", modal: null, detailCard: null, inviteMode: false });
   renderRoom(); refreshRoom();
   clearInterval(state.timer); state.timer = setInterval(() => refreshRoom(true), 2800);
 }
@@ -140,7 +166,18 @@ async function refreshRoom(silent = false) {
     state.room = next;
     if (!silent) state.error = "";
     if (!silent || changed) renderRoom();
-  } catch (error) { if (!silent) { state.error = error.message; renderRoom(); } }
+  } catch (error) {
+    if (error.status === 401) {
+      const code = state.activeCode;
+      localStorage.removeItem(`open-zoo:${code}`);
+      clearInterval(state.timer);
+      history.replaceState({}, "", `/?room=${code}`);
+      Object.assign(state, { activeCode: "", token: "", room: null, joinCode: code, inviteMode: true, busy: "", error: "連線資料已失效，請輸入名稱重新加入。" });
+      renderLanding();
+      return;
+    }
+    if (!silent) { state.error = error.message; renderRoom(); }
+  }
 }
 
 function renderRoom() {
@@ -423,7 +460,7 @@ async function copyRoom() {
 
 function leaveRoom() {
   clearInterval(state.timer); history.replaceState({}, "", "/");
-  Object.assign(state, { activeCode: "", token: "", room: null, busy: "", error: "", modal: null, detailCard: null, logOpen: false });
+  Object.assign(state, { activeCode: "", token: "", room: null, busy: "", error: "", modal: null, detailCard: null, logOpen: false, inviteMode: false, joinCode: "" });
   renderLanding();
 }
 
@@ -434,6 +471,7 @@ async function init() {
     state.joinCode = code;
     const token = localStorage.getItem(`open-zoo:${code}`) ?? "";
     if (token) { enterRoom(code, token); return; }
+    state.inviteMode = true;
   }
   renderLanding();
 }
