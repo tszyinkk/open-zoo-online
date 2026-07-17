@@ -113,11 +113,14 @@ function cardMarkup(card, options = {}) {
   const cost = card.type === "animal" ? `$${card.cost}` : card.type === "sponsor" ? `強度 ${card.level}` : `#${card.rawId}`;
   const score = card.type === "animal" ? `魅力 ${card.appeal}` : card.type === "sponsor" ? `${card.effects?.length ?? 0} 項效果` : card.type === "project" ? "保育" : "終局";
   const habitat = card.type === "animal" ? (card.aquarium ? `水族館 ${card.aquarium}` : `圍欄 ${card.size}`) : typeName(card);
+  const requirements = (card.requirements ?? []).slice(0, 2);
+  const identity = card.type === "animal" ? [card.kind, card.continent].filter(Boolean) : (card.tags ?? []).slice(0, 2);
   return `<article class="${classes}" ${buttonAttrs}>
-    <div class="card-topline"><span class="habitat-cost">${esc(habitat)}</span><b>${esc(cost)}</b></div>
-    <div class="card-art ${artClass(card)}" aria-hidden="true"><span>${card.type === "project" ? "♟" : card.type === "endgame" ? "◎" : ""}</span><small>#${esc(card.rawId)}</small>${card.wave ? "<i>〰</i>" : ""}</div>
-    <div class="card-body"><div class="card-title-line"><h3>${esc(card.zh)}</h3><b>${esc(score)}</b></div>${card.latinName ? `<small>${esc(card.latinName)}</small>` : card.zh !== card.name ? `<small>${esc(card.name)}</small>` : ""}<div class="tag-row">${(card.tags ?? []).slice(0, 3).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div><p>${esc(abilityText(card))}</p></div>
-    <div class="card-footer"><strong>${esc(cost)}</strong><span>${esc(score)}</span>${card.type === "animal" ? `<b>格 ${card.aquarium || card.size}</b>` : ""}</div>
+    <div class="card-topline"><span>${esc(typeName(card))}</span><span class="card-requirements">${requirements.length ? requirements.map((item) => `<i>${esc(item)}</i>`).join("") : "<i>無條件</i>"}</span><b>#${esc(card.rawId)}</b></div>
+    <div class="card-art ${artClass(card)}" aria-hidden="true"><span>${card.type === "project" ? "♟" : card.type === "endgame" ? "◎" : ""}</span><small>${esc(card.expansion === "marine" ? "MARINE WORLDS" : "OPEN ZOO")}</small>${card.wave ? "<i>〰</i>" : ""}<em class="card-price">${esc(cost)}</em><em class="card-habitat">${esc(habitat)}</em></div>
+    <div class="card-nameplate"><div><h3>${esc(card.zh)}</h3>${card.latinName ? `<small>${esc(card.latinName)}</small>` : card.zh !== card.name ? `<small>${esc(card.name)}</small>` : ""}</div><b>${esc(score)}</b></div>
+    <div class="card-body"><div class="card-icon-row">${identity.map((item) => `<span>${esc(item)}</span>`).join("")}</div><p>${esc(abilityText(card))}</p></div>
+    <div class="card-footer"><strong>${esc(cost)}</strong><span>${(card.tags ?? []).slice(0, 2).map(esc).join(" · ") || esc(typeName(card))}</span><b>${esc(score)}</b></div>
   </article>`;
 }
 
@@ -140,7 +143,7 @@ function renderLanding() {
         <div class="or-divider"><span>或者加入朋友</span></div><form class="join-form" id="join-form"><input id="join-code" aria-label="六位房間代碼或邀請連結" placeholder="房間代碼／邀請連結" value="${esc(state.joinCode)}"><button class="secondary-button" ${state.busy || !state.name.trim() || state.joinCode.length < 6 ? "disabled" : ""}>${state.busy === "join" ? "加入緊…" : "加入"}</button></form>
         ${state.error ? `<p class="form-error" role="alert">${esc(state.error)}</p>` : ""}<p class="privacy-note">毋須註冊。每個網絡每日最多開 5 間房；加入朋友房間不限。</p></div>`;
   app.innerHTML = `<main class="landing-shell">
-    <header class="topbar"><a class="brand" href="#top"><span class="brand-mark">OZ</span><span>OPEN ZOO <small>ONLINE</small></span></a><span class="build-badge">版圖及 Track 易讀版 · v1.2</span></header>
+    <header class="topbar"><a class="brand" href="#top"><span class="brand-mark">OZ</span><span>OPEN ZOO <small>ONLINE</small></span></a><span class="build-badge">桌面版重製 · v1.3</span></header>
     <section class="hero" id="top">
       <div class="hero-copy"><p class="eyebrow">免費 · 開源 · 2–4 人即時連線</p><h1>一張連結，<br>開一間動物園。</h1><p class="hero-lede">繁體中文、基本版連 Marine Worlds。由揀起手牌、建造、動物、協會、贊助、休息收入，到兩條計分軌相遇，都喺瀏覽器完成。</p><div class="promise-row"><span><b>4</b> 位園長</span><span><b>296</b> 張牌索引</span><span><b>0</b> 蚊月費</span></div></div>
       ${entryPanel}
@@ -330,17 +333,27 @@ function scoreTrackMarkup(data, { id, label, icon, min, max, ticks, valueKey, no
 
 function boardTracksMarkup(data) {
   const game = data.state;
-  const breakTicks = [...new Set([0, Math.floor(game.breakTarget / 4), Math.floor(game.breakTarget / 2), Math.floor(game.breakTarget * .75), game.breakTarget])];
-  const breakScale = breakTicks.map((value) => `<span style="--position:${trackPosition(value, 0, game.breakTarget)}%"><i></i><b>${value}</b></span>`).join("");
-  const breakMarker = `<span class="track-player break-token" style="--position:${trackPosition(game.breakProgress, 0, game.breakTarget)}%;--lane:0"><i>☕</i><b>${game.breakProgress}</b></span>`;
+  const scoreTicks = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 113].map((value) => `<span style="--position:${trackPosition(value, 0, 113)}%"><i></i><b>${value}</b></span>`).join("");
+  const appealMarkers = data.players.map((player, lane) => {
+    const value = Number(game.playerState[player.id]?.appeal ?? 0);
+    return `<span class="score-disc appeal-disc" style="--position:${trackPosition(value, 0, 113)}%;--lane:${lane};--player:${player.color}" title="${esc(player.name)}魅力：${value}"><i>${esc(player.name[0])}</i><b>${value}</b></span>`;
+  }).join("");
+  const conservationMarkers = data.players.map((player, lane) => {
+    const value = Number(game.playerState[player.id]?.conservation ?? 0);
+    return `<span class="score-disc conservation-disc" style="--position:${100 - trackPosition(value, 0, 40)}%;--lane:${lane};--player:${player.color}" title="${esc(player.name)}保育：${value}"><i>${esc(player.name[0])}</i><b>${value}</b></span>`;
+  }).join("");
+  const rail = (id, label, icon, maximum, valueKey) => `<div class="board-rail rail-${id}"><div class="rail-label"><i>${icon}</i><span><b>${label}</b><small>0–${maximum}</small></span></div><div class="rail-cells">${Array.from({ length: maximum + 1 }, (_, value) => {
+    const markers = valueKey === "breakProgress"
+      ? (Math.min(maximum, game.breakProgress) === value ? `<i class="rail-token break-token" title="休息 ${game.breakProgress}">☕</i>` : "")
+      : data.players.filter((player) => Math.min(maximum, Number(game.playerState[player.id]?.[valueKey] ?? 0)) === value).map((player) => `<i class="rail-token" style="--player:${player.color}" title="${esc(player.name)}：${value}">${esc(player.name[0])}</i>`).join("");
+    return `<span class="rail-cell ${markers ? "occupied" : ""}"><b>${value}</b><em>${markers}</em></span>`;
+  }).join("")}</div></div>`;
   return `<section class="board-tracks" aria-label="遊戲計分軌">
-    <header><div><small>共用主版圖</small><h2>遊戲軌道</h2></div><div class="track-player-key">${data.players.map((player) => `<span style="--player:${player.color}"><i>${esc(player.name[0])}</i>${esc(player.name)}</span>`).join("")}</div></header>
-    <div class="track-rack">
-      ${scoreTrackMarkup(data, { id: "appeal", label: "魅力", icon: "★", min: 0, max: 113, ticks: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 113], valueKey: "appeal", note: "0–113" })}
-      ${scoreTrackMarkup(data, { id: "conservation", label: "保育", icon: "盾", min: 0, max: 40, ticks: [0, 5, 10, 15, 20, 25, 30, 35, 40], valueKey: "conservation", note: "0–40" })}
-      ${scoreTrackMarkup(data, { id: "reputation", label: "聲譽", icon: "@", min: 0, max: 15, ticks: [0, 2, 5, 8, 10, 12, 15], valueKey: "reputation", note: "決定展列可取範圍" })}
-      <div class="score-track track-break"><div class="track-label"><i>☕</i><span><b>休息</b><small>${game.breakProgress}/${game.breakTarget}</small></span></div><div class="track-lane"><div class="track-scale">${breakScale}</div>${breakMarker}</div></div>
-    </div>
+    <header><div><small>共用主版圖</small><h2>魅力 × 保育</h2></div><div class="track-player-key">${data.players.map((player) => `<span style="--player:${player.color}"><i>${esc(player.name[0])}</i>${esc(player.name)}</span>`).join("")}</div></header>
+    <div class="dual-score-head"><span><i>★</i><b>魅力由左向右</b></span><span><b>保育由右向左</b><i>盾</i></span></div>
+    <div class="dual-score-track"><div class="dual-scale">${scoreTicks}</div>${appealMarkers}${conservationMarkers}</div>
+    <div class="utility-tracks">${rail("reputation", "聲譽", "@", 15, "reputation")}${rail("break", "休息", "☕", 15, "breakProgress")}</div>
+    <div class="break-rule-note"><b>休息終點固定為 15</b><span>目前 ${game.breakProgress}/15 · 到達即結算收入並重置協會人員</span></div>
   </section>`;
 }
 
