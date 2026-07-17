@@ -16,6 +16,7 @@ await cp(resolve(root, "public/app.js"), resolve(dist, "client/app.js"));
 await cp(resolve(root, "app/globals.css"), resolve(dist, "client/styles.css"));
 await cp(resolve(root, "worker/index.js"), resolve(dist, "server/index.js"));
 await cp(resolve(root, "data/catalog.js"), resolve(dist, "data/catalog.js"));
+await cp(resolve(root, "data/card-facts.js"), resolve(dist, "data/card-facts.js"));
 await cp(resolve(root, ".openai/hosting.json"), resolve(dist, ".openai/hosting.json"));
 await cp(resolve(root, "drizzle"), resolve(dist, ".openai/drizzle"), { recursive: true });
 
