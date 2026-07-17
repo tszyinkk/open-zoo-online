@@ -2,7 +2,7 @@ import { ACTIONS, CARD_BY_ID, CARDS, MAPS, deckIds, endgameIds, projectIds, proj
 
 const PLAYER_COLORS = ["#dc604d", "#3188a4", "#d0a72e", "#668a56"];
 const ACTION_IDS = ACTIONS.map((action) => action.id);
-const BREAK_TARGETS = { 2: 16, 3: 14, 4: 12 };
+const BREAK_TARGET = 15;
 const MAX_LOG = 40;
 let schemaPromise;
 
@@ -38,6 +38,10 @@ function json(value, status = 200) {
 function normalizeName(value) { return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, 18) : ""; }
 function normalizeCode(value) { return typeof value === "string" ? value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6) : ""; }
 function initialGameState() { return { version: 2, phase: "lobby", log: ["房間已建立，等待其他園長加入。"] }; }
+function normalizeGameState(game) {
+  if (game?.phase && game.phase !== "lobby") game.breakTarget = BREAK_TARGET;
+  return game;
+}
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
 function clamp(value, minimum, maximum) { return Math.max(minimum, Math.min(maximum, Number(value) || 0)); }
 function intClamp(value, minimum, maximum) { return Math.floor(clamp(value, minimum, maximum)); }
@@ -94,7 +98,7 @@ function privateState(game, viewerId) {
 
 function payload(loaded, viewerId) {
   const { room, players } = loaded;
-  const game = JSON.parse(room.game_state);
+  const game = normalizeGameState(JSON.parse(room.game_state));
   return {
     room: {
       code: room.code, status: room.status, marineWorlds: Boolean(room.marine_worlds),
@@ -192,7 +196,7 @@ function createGame(players, marineWorlds, code) {
   const shuffledProjects = shuffle(projectIds(marineWorlds), `${seedText}:projects`);
   const game = {
     version: 3, phase: "setup", seed: seedText, round: 1, turn: 0, currentPlayerId: null, firstPlayerId: players[0].id,
-    breakProgress: 0, breakTarget: BREAK_TARGETS[players.length] ?? 12,
+    breakProgress: 0, breakTarget: BREAK_TARGET,
     deck, discard: [], market: [],
     projects: shuffledProjects.slice(0, players.length === 4 ? 4 : 3).map((cardId) => ({ cardId, claims: [], base: true })),
     association: { occupied: [], marineUniversityAvailable: marineWorlds },
@@ -929,7 +933,7 @@ async function commandRoom(request, env, code) {
   if (!loaded) return json({ error: "搵唔到呢個房間" }, 404);
   const viewer = await authenticate(env, loaded.room.id, typeof input.playerToken === "string" ? input.playerToken : "");
   if (!viewer) return json({ error: "請重新加入房間" }, 401);
-  const game = JSON.parse(loaded.room.game_state);
+  const game = normalizeGameState(JSON.parse(loaded.room.game_state));
   try { applyGameCommand(game, loaded.players, viewer, input, Boolean(loaded.room.marine_worlds)); }
   catch (error) { return json({ error: error.message || "行動無法完成" }, 409); }
   const status = game.phase === "setup" ? "setup" : game.phase === "finished" ? "finished" : "playing";
