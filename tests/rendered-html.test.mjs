@@ -34,8 +34,9 @@ test("serves the secure Open Zoo application shell", async () => {
 });
 
 test("ships the complete catalogue and core game surfaces", async () => {
-  const [client, worker, catalog] = await Promise.all([
+  const [client, styles, worker, catalog] = await Promise.all([
     readFile(new URL("../dist/client/app.js", import.meta.url), "utf8"),
+    readFile(new URL("../dist/client/styles.css", import.meta.url), "utf8"),
     readFile(new URL("../dist/server/index.js", import.meta.url), "utf8"),
     import(new URL(`../dist/data/catalog.js?${Date.now()}`, import.meta.url)),
   ]);
@@ -56,6 +57,10 @@ test("ships the complete catalogue and core game surfaces", async () => {
   assert.match(client, /加入私人房間/);
   assert.match(client, /roomCodeFromInput/);
   assert.match(client, /連線資料已失效/);
+  assert.match(client, /boardTracksMarkup/);
+  assert.match(client, /zoo-map-stage/);
+  assert.match(styles, /background-size: 400% auto/);
+  assert.match(styles, /\.track-conservation/);
   assert.match(worker, /過去 24 小時已建立 5 個房間/);
   assert.match(worker, /reefCards/);
   assert.match(worker, /wave/);
