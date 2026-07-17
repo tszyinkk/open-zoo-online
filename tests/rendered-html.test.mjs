@@ -46,6 +46,9 @@ test("ships the complete catalogue and core game surfaces", async () => {
   assert.match(client, /confirm-setup/);
   assert.match(client, /data-open-action/);
   assert.match(client, /保育計劃/);
+  assert.match(client, /加入私人房間/);
+  assert.match(client, /roomCodeFromInput/);
+  assert.match(client, /連線資料已失效/);
   assert.match(worker, /過去 24 小時已建立 5 個房間/);
   assert.match(worker, /reefCards/);
   assert.match(worker, /wave/);
