@@ -140,7 +140,7 @@ function renderLanding() {
         <div class="or-divider"><span>或者加入朋友</span></div><form class="join-form" id="join-form"><input id="join-code" aria-label="六位房間代碼或邀請連結" placeholder="房間代碼／邀請連結" value="${esc(state.joinCode)}"><button class="secondary-button" ${state.busy || !state.name.trim() || state.joinCode.length < 6 ? "disabled" : ""}>${state.busy === "join" ? "加入緊…" : "加入"}</button></form>
         ${state.error ? `<p class="form-error" role="alert">${esc(state.error)}</p>` : ""}<p class="privacy-note">毋須註冊。每個網絡每日最多開 5 間房；加入朋友房間不限。</p></div>`;
   app.innerHTML = `<main class="landing-shell">
-    <header class="topbar"><a class="brand" href="#top"><span class="brand-mark">OZ</span><span>OPEN ZOO <small>ONLINE</small></span></a><span class="build-badge">卡牌及地圖校正版 · v1.1</span></header>
+    <header class="topbar"><a class="brand" href="#top"><span class="brand-mark">OZ</span><span>OPEN ZOO <small>ONLINE</small></span></a><span class="build-badge">版圖及 Track 易讀版 · v1.2</span></header>
     <section class="hero" id="top">
       <div class="hero-copy"><p class="eyebrow">免費 · 開源 · 2–4 人即時連線</p><h1>一張連結，<br>開一間動物園。</h1><p class="hero-lede">繁體中文、基本版連 Marine Worlds。由揀起手牌、建造、動物、協會、贊助、休息收入，到兩條計分軌相遇，都喺瀏覽器完成。</p><div class="promise-row"><span><b>4</b> 位園長</span><span><b>296</b> 張牌索引</span><span><b>0</b> 蚊月費</span></div></div>
       ${entryPanel}
@@ -304,7 +304,8 @@ function tableMarkup(data) {
   const hand = me.hand.length ? me.hand.map((id) => cardMarkup(cardInfo(id), { compact: true })).join("") : `<div class="empty-hand"><span>▤</span><p>手上暫時冇牌</p></div>`;
   const target = Math.max(-20, 112 - me.conservation * 7);
   return `<section class="turn-banner ${myTurn ? "your-turn" : ""}"><div><small>第 ${game.round} 個休息週期</small><strong>${myTurn ? "到你行動" : `等待 ${esc(current?.name ?? "下一位園長")}`}</strong>${game.finale ? `<span class="finale-chip">最後一輪 · 尚餘 ${game.finale.remaining.length} 手</span>` : ""}</div><div class="break-meter"><span>休息軌</span><div><i style="width:${Math.min(100, game.breakProgress / game.breakTarget * 100)}%"></i></div><b>${game.breakProgress}/${game.breakTarget}</b></div><span class="edition-chip">${data.room.marineWorlds ? "Marine Worlds" : "基本版"}</span></section>
-    <section class="score-table">${players}</section>
+    ${boardTracksMarkup(data)}
+    <section class="score-table player-ledger">${players}</section>
     <section class="central-board"><div class="display-panel"><div class="section-title"><div><small>共用展列</small><h2>卡牌市場</h2></div><span>你嘅聲譽：${me.reputation}</span></div><div class="card-market">${market}</div></div>
       <div class="association-panel"><div class="section-title"><div><small>共用版圖</small><h2>保育計劃</h2></div><span>${me.workers - me.usedWorkers}/${me.workers} 人員可用</span></div><div class="project-row">${game.projects.map(projectMarkup).join("")}</div><div class="association-spaces"><span><b>2</b> 聲譽</span><span><b>3</b> 合作動物園</span><span><b>4</b> 大學</span><span><b>5</b> 保育計劃</span></div></div></section>
     <section class="personal-area"><div class="zoo-panel"><div class="section-title"><div><small>${esc(mapInfo(me.mapId)?.name)}</small><h2>${esc(viewer()?.name)}嘅動物園</h2></div><span>${me.structures.length} 座設施 · ${me.playedAnimals.length} 隻動物</span></div>${mapAbilityMarkup(me, game, myTurn)}${zooMapMarkup(me)}<div class="resource-ribbon"><span><small>金錢</small><b>$${me.money}</b></span><span><small>魅力</small><b>${me.appeal}</b></span><span><small>保育</small><b>${me.conservation}</b></span><span><small>聲譽</small><b>${me.reputation}</b></span><span><small>X 標記</small><b>${me.xTokens}/5</b></span><span><small>終局目標</small><b>${target}</b></span></div></div>
@@ -312,6 +313,35 @@ function tableMarkup(data) {
     ${me.upgradeCredits > 0 ? upgradePanel(me) : ""}
     <section class="hand-section"><div class="section-title"><div><small>私人區域 · ${me.hand.length}/${me.handLimit} 張</small><h2>你嘅手牌</h2></div><span>休息時會自動棄至手牌上限</span></div><div class="hand-scroll">${hand}</div></section>
     <section class="action-dock"><div class="dock-heading"><div><small>行動卡由左至右：強度 1–5</small><h2>${myTurn ? "揀一張行動卡" : `未到你，等待 ${esc(current?.name ?? "下一位園長")}`}</h2></div><span>用完會移到最左邊強度 1</span></div><div class="action-cards">${actions}</div></section>`;
+}
+
+function trackPosition(value, min, max) {
+  return Math.max(0, Math.min(100, ((Number(value) - min) / (max - min)) * 100));
+}
+
+function scoreTrackMarkup(data, { id, label, icon, min, max, ticks, valueKey, note }) {
+  const scale = ticks.map((value) => `<span style="--position:${trackPosition(value, min, max)}%"><i></i><b>${value}</b></span>`).join("");
+  const markers = data.players.map((player, lane) => {
+    const value = Number(data.state.playerState[player.id]?.[valueKey] ?? min);
+    return `<span class="track-player" style="--position:${trackPosition(value, min, max)}%;--lane:${lane};--player:${player.color}" title="${esc(player.name)}：${value}"><i>${esc(player.name[0])}</i><b>${value}</b></span>`;
+  }).join("");
+  return `<div class="score-track track-${id}"><div class="track-label"><i>${icon}</i><span><b>${label}</b><small>${note}</small></span></div><div class="track-lane"><div class="track-scale">${scale}</div>${markers}</div></div>`;
+}
+
+function boardTracksMarkup(data) {
+  const game = data.state;
+  const breakTicks = [...new Set([0, Math.floor(game.breakTarget / 4), Math.floor(game.breakTarget / 2), Math.floor(game.breakTarget * .75), game.breakTarget])];
+  const breakScale = breakTicks.map((value) => `<span style="--position:${trackPosition(value, 0, game.breakTarget)}%"><i></i><b>${value}</b></span>`).join("");
+  const breakMarker = `<span class="track-player break-token" style="--position:${trackPosition(game.breakProgress, 0, game.breakTarget)}%;--lane:0"><i>☕</i><b>${game.breakProgress}</b></span>`;
+  return `<section class="board-tracks" aria-label="遊戲計分軌">
+    <header><div><small>共用主版圖</small><h2>遊戲軌道</h2></div><div class="track-player-key">${data.players.map((player) => `<span style="--player:${player.color}"><i>${esc(player.name[0])}</i>${esc(player.name)}</span>`).join("")}</div></header>
+    <div class="track-rack">
+      ${scoreTrackMarkup(data, { id: "appeal", label: "魅力", icon: "★", min: 0, max: 113, ticks: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 113], valueKey: "appeal", note: "0–113" })}
+      ${scoreTrackMarkup(data, { id: "conservation", label: "保育", icon: "盾", min: 0, max: 40, ticks: [0, 5, 10, 15, 20, 25, 30, 35, 40], valueKey: "conservation", note: "0–40" })}
+      ${scoreTrackMarkup(data, { id: "reputation", label: "聲譽", icon: "@", min: 0, max: 15, ticks: [0, 2, 5, 8, 10, 12, 15], valueKey: "reputation", note: "決定展列可取範圍" })}
+      <div class="score-track track-break"><div class="track-label"><i>☕</i><span><b>休息</b><small>${game.breakProgress}/${game.breakTarget}</small></span></div><div class="track-lane"><div class="track-scale">${breakScale}</div>${breakMarker}</div></div>
+    </div>
+  </section>`;
 }
 
 function playerSummary(player, stats, active, mine) {
@@ -333,14 +363,15 @@ function zooMapMarkup(me, selectable = false) {
     const feature = map?.features?.[cell];
     const selected = selectable && state.modal?.cell === cell ? "selected" : "";
     const bonus = map?.bonuses?.[cell];
-    const content = structure?.anchor ? `<b>${esc(structure.label.replace("圍欄", "圍"))}</b><small>${structure.occupied || structure.used ? "使用中" : "空置"}</small>` : structure ? "" : terrain === "water" ? "≋" : terrain === "rock" ? "▲" : feature ? `<strong>${esc(feature)}</strong>` : bonus ? `<em>${esc(bonus)}</em>` : "";
+    const shortFeature = feature?.length > 4 ? feature.slice(0, 4) : feature;
+    const content = structure?.anchor ? `<b>${esc(structure.label.replace("圍欄", "圍"))}</b><small>${structure.occupied || structure.used ? "使用中" : "空置"}</small>` : structure ? "" : terrain === "water" ? `<i class="terrain-glyph">≈</i>` : terrain === "rock" ? `<i class="terrain-glyph">◆</i>` : feature ? `<strong title="${esc(feature)}">${esc(shortFeature)}</strong>` : bonus ? `<em>${esc(bonus)}</em>` : "";
     const buildable = selectable && !structure && !terrain && !feature;
     return `<button class="hex ${terrain} ${feature ? "feature" : ""} ${structure ? `built build-${structure.type}` : ""} ${selected}" ${buildable ? `data-build-cell="${cell}"` : "disabled"}><span>${content}</span></button>`;
   };
   let cell = 0;
   const rows = [9, 10, 9, 10, 9, 10, 9, 10, 9, 10].map((amount, row) => `<div class="hex-row row-${row}">${Array.from({ length: amount }, () => renderCell(cell++)).join("")}</div>`).join("");
   const projectBonuses = ["收入", "協會員", "聲譽", "X", "抽牌", "$5", "升級"].map((label, index) => `<span class="${index < me.supportedProjects.length ? "claimed" : ""}"><i>${index < me.supportedProjects.length ? "✓" : "■"}</i><small>${label}</small></span>`).join("");
-  return `<div class="zoo-board-frame"><aside class="project-bonus-strip"><b>保育獎勵</b>${projectBonuses}</aside><div class="hex-map" aria-label="${esc(map?.name ?? "動物園地圖")}">${rows}</div><aside class="building-key"><b>建築</b><span>⬡ 圍欄<br><small>1–5 格</small></span><span>▣ 親親動物園<br><small>3 格</small></span><span>⌂ 爬蟲館／鳥舍<br><small>5 格</small></span><span>● 亭店／涼亭<br><small>1 格</small></span></aside></div>`;
+  return `<div class="zoo-map-stage"><div class="zoo-board-frame"><aside class="project-bonus-strip"><b>保育獎勵</b>${projectBonuses}</aside><div class="hex-map map-${esc(map?.id ?? "A")}" aria-label="${esc(map?.name ?? "動物園地圖")}">${rows}</div><aside class="building-key"><b>建築圖例</b><span class="key-enclosure"><i>⬡</i> 圍欄<br><small>1–5 格</small></span><span class="key-petting"><i>▣</i> 親親動物園<br><small>3 格</small></span><span class="key-special"><i>⌂</i> 爬蟲館／鳥舍<br><small>5 格</small></span><span class="key-kiosk"><i>●</i> 亭店／涼亭<br><small>1 格</small></span></aside></div><div class="map-caption"><span>${esc(map?.name ?? "動物園地圖")}</span><small>岩石、水域、獎勵格及建築位置會保留到遊戲結束</small></div></div>`;
 }
 
 function mapAbilityMarkup(me, game, myTurn) {
