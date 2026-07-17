@@ -84,6 +84,17 @@ test("runs setup, upgrade and a legal build through the server engine", async ()
   assert.equal(game.currentPlayerId, "p2");
 });
 
+test("uses the official 15-space break target for a four-player game", async () => {
+  const { __testing } = await builtWorker();
+  const players = [
+    { id: "p1", name: "甲", seat: 0 },
+    { id: "p2", name: "乙", seat: 1 },
+    { id: "p3", name: "丙", seat: 2 },
+    { id: "p4", name: "丁", seat: 3 },
+  ];
+  assert.equal(__testing.createGame(players, true, "FOUR15").breakTarget, 15);
+});
+
 test("validates Marine Worlds habitats, actions and hidden information", async () => {
   const { __testing } = await builtWorker();
   const players = [{ id: "p1", name: "甲", seat: 0 }, { id: "p2", name: "乙", seat: 1 }];
