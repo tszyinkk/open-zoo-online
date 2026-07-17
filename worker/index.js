@@ -756,7 +756,8 @@ async function staticRequest(request, env, pathname) {
   outgoing.headers.set("x-content-type-options", "nosniff");
   outgoing.headers.set("referrer-policy", "same-origin");
   outgoing.headers.set("content-security-policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'");
-  outgoing.headers.set("cache-control", pathname === "/" || pathname.endsWith(".html") ? "no-cache" : "public, max-age=3600");
+  const revalidate = pathname === "/" || pathname.endsWith(".html") || pathname === "/app.js" || pathname === "/styles.css";
+  outgoing.headers.set("cache-control", revalidate ? "no-cache" : "public, max-age=3600");
   return outgoing;
 }
 
