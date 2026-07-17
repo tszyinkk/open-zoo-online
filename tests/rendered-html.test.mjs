@@ -42,6 +42,13 @@ test("ships the complete catalogue and core game surfaces", async () => {
   assert.equal(catalog.CARDS.length, 296);
   assert.equal(catalog.CARDS.filter((card) => card.type === "animal").length, 160);
   assert.equal(catalog.CARDS.filter((card) => card.type === "sponsor").length, 80);
+  assert.deepEqual(
+    Object.fromEntries(["401", "402", "529"].map((id) => {
+      const card = catalog.CARD_BY_ID[id];
+      return [id, [card.zh, card.cost, card.size, card.appeal, card.aquarium]];
+    })),
+    { 401: ["獵豹", 17, 5, 6, 0], 402: ["獅子", 16, 4, 9, 0], 529: ["公主海葵", 6, 1, 3, 1] },
+  );
   assert.match(client, /Marine Worlds/);
   assert.match(client, /confirm-setup/);
   assert.match(client, /data-open-action/);
@@ -66,7 +73,8 @@ test("runs setup, upgrade and a legal build through the server engine", async ()
   const first = game.playerState.p1;
   first.actionOrder = ["cards", "association", "sponsors", "animals", "build"];
   __testing.applyGameCommand(game, players, players[0], { type: "build", structure: "enclosure2", cell: 0, x: 0 }, true);
-  assert.equal(first.structures.length, 1);
+  assert.equal(first.structures.length, 2);
+  assert.equal(first.structures[0].starting, true);
   assert.equal(first.money, 21);
   assert.equal(game.currentPlayerId, "p2");
 });
@@ -91,12 +99,12 @@ test("validates Marine Worlds habitats, actions and hidden information", async (
     __testing.applyGameCommand(game, players, players[0], { type, x: 0, ...command }, true);
   };
 
-  takeTurn("build", { structure: "aquariumSmall", cell: 3 });
+  takeTurn("build", { structure: "aquariumSmall", cell: 4 });
   takeTurn("animals", { cardIds: ["530"] });
   takeTurn("sponsors", { mode: "play", cardId: "266" });
   takeTurn("association", { task: "university", target: "animal:海洋" });
 
-  assert.equal(first.structures[0].type, "aquariumSmall");
+  assert.ok(first.structures.some((structure) => structure.type === "aquariumSmall"));
   assert.deepEqual(first.playedAnimals, ["530"]);
   assert.deepEqual(first.sponsors, ["266"]);
   assert.ok(first.universities.includes("animal:海洋"));
