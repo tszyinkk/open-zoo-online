@@ -49,20 +49,58 @@ function typeName(card) {
 
 function abilityText(card) {
   if (!card) return "";
-  if (card.type === "project") return `門檻 ${card.thresholds.join(" / ")} · 獎勵 ${card.points.join(" / ")} 保育分`;
-  if (card.type === "endgame") return "終局按你嘅動物園發展計算，最多 4 保育分。";
-  const value = card.abilityValue ?? 1;
-  const text = {
-    money: `即時取得 $${value * 2}`,
-    draw: `即時抽 ${value} 張牌`,
-    appeal: `額外取得 ${value} 魅力`,
-    reputation: `聲譽提升 ${value}`,
-    x: `取得 ${value} 個 X 標記`,
-    break: `休息軌推進 ${value} 格`,
-    conservation: `取得 ${Math.min(2, value)} 保育分`,
-  }[card.ability] ?? "提供持續動物園效果";
-  if (card.reef) return `珊瑚礁：${text}；每次打出礁居者會再觸發全園礁效果。`;
-  return text;
+  if (card.type === "project") return card.verified
+    ? `門檻 ${card.thresholds.join(" / ")} · 獎勵 ${card.points.join(" / ")} 保育分`
+    : "Marine Worlds 呢張保育計劃仲喺逐項校正，暫時唔會加入牌庫。";
+  if (card.type === "endgame") return card.scores?.length
+    ? card.scores.map((entry) => `${entry.requirement} → ${entry.points} 保育分`).join(" · ")
+    : "終局按你嘅動物園發展計算，最多 4 保育分。";
+  if (card.type === "sponsor") {
+    const kinds = [...new Set((card.effects ?? []).map((effect) => ({ IMMEDIATE: "即時", INCOME: "收入", PASSIVE: "持續", ENDGAME: "終局", CONSERVATION: "保育" })[effect.type] ?? "特殊"))];
+    return kinds.length ? `${kinds.join("／")}效果 · 已按原卡類型校正` : "呢張牌冇額外文字效果。";
+  }
+  const lines = (card.abilities ?? []).map(abilitySummary);
+  const reef = (card.reefEffects ?? []).map(abilitySummary);
+  if (reef.length) lines.push(`珊瑚礁：${reef.join("、")}`);
+  return lines.join(" · ") || "冇即時能力；只提供卡面圖標同分數。";
+}
+
+function abilitySummary(ability) {
+  const n = ability?.value === "" || ability?.value == null ? "" : Number(ability.value) || ability.value;
+  const summaries = {
+    SPRINT: `疾跑 ${n}：抽 ${n} 張牌`,
+    HUNTER: `狩獵 ${n}：查看牌頂 ${n} 張，揀 1 張動物`,
+    PACK: "群居：按你動物園嘅肉食圖標增加魅力",
+    CLEVER: "機靈：完成後將一張行動卡移到強度 1",
+    JUMPING: `跳躍 ${n}：推進休息並取得金錢`,
+    INVENTIVE: `創造力：取得 ${n || 1} 個 X 標記`,
+    INVENTIVE_BEAR: "創造力—熊：按全場熊圖標取得 X 標記",
+    INVENTIVE_PRIMARY: "創造力—靈長：按靈長圖標取得 X 標記",
+    FULL_THROATED: "呼喚：增加 1 名協會員",
+    PERCEPTION_2: "感知 2：抽 2 留 1",
+    PERCEPTION_4: "感知 4：抽 4 留 2",
+    REPUTATION: `聲譽 +${n || 1}`,
+    CONSERVATION_POINT: `保育 +${n || 1}`,
+    APPEAL: `魅力 +${n || 1}`,
+    MARK: "標示：完成後標示展列 1 張動物",
+    TRADE: "交易：X 標記同 $5 可以互換",
+    EXTRA_SHIFT: "額外輪班：收回 1 名協會員",
+    SCAVENGING: `食腐 ${n}：由棄牌堆揀牌`,
+    SNAPPING_1: "攫取 1：取得展列任意 1 張牌",
+    SNAPPING_2: "攫取 2：取得展列最多 2 張牌",
+    DETERMINATION: "決心：完成後額外執行 1 次行動",
+  };
+  if (summaries[ability?.key]) return summaries[ability.key];
+  const label = ability?.label || String(ability?.key ?? "特殊能力").toLowerCase().replaceAll("_", " ");
+  return n === "" ? label : `${label} ${n}`;
+}
+
+function artClass(card) {
+  if (card.type !== "animal") return "art-habitat";
+  return {
+    肉食: "art-predator", 草食: "art-herbivore", 靈長: "art-primate", 爬蟲: "art-reptile",
+    鳥類: "art-bird", 海洋: "art-marine", 萌寵: "art-pet",
+  }[card.kind] ?? "art-habitat";
 }
 
 function cardMarkup(card, options = {}) {
@@ -73,11 +111,12 @@ function cardMarkup(card, options = {}) {
     ? `role="button" tabindex="0" data-pick-card="${esc(card.rawId)}" aria-pressed="${selected}"`
     : `role="button" tabindex="0" data-card-detail="${esc(card.rawId)}"`;
   const cost = card.type === "animal" ? `$${card.cost}` : card.type === "sponsor" ? `強度 ${card.level}` : `#${card.rawId}`;
-  const score = card.type === "animal" ? `魅力 ${card.appeal}` : card.type === "sponsor" ? `收入 ${card.income}` : card.type === "project" ? "保育" : "終局";
+  const score = card.type === "animal" ? `魅力 ${card.appeal}` : card.type === "sponsor" ? `${card.effects?.length ?? 0} 項效果` : card.type === "project" ? "保育" : "終局";
+  const habitat = card.type === "animal" ? (card.aquarium ? `水族館 ${card.aquarium}` : `圍欄 ${card.size}`) : typeName(card);
   return `<article class="${classes}" ${buttonAttrs}>
-    <div class="card-topline"><span>${typeName(card)}</span><b>#${esc(card.rawId)}</b></div>
-    <div class="card-art" aria-hidden="true"><span>${card.type === "animal" ? animalGlyph(card.kind) : card.type === "sponsor" ? "◆" : card.type === "project" ? "♟" : "◎"}</span>${card.wave ? "<i>〰</i>" : ""}</div>
-    <div class="card-body"><h3>${esc(card.zh)}</h3>${card.zh !== card.name ? `<small>${esc(card.name)}</small>` : ""}<div class="tag-row">${(card.tags ?? []).slice(0, 2).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div><p>${esc(abilityText(card))}</p></div>
+    <div class="card-topline"><span class="habitat-cost">${esc(habitat)}</span><b>${esc(cost)}</b></div>
+    <div class="card-art ${artClass(card)}" aria-hidden="true"><span>${card.type === "project" ? "♟" : card.type === "endgame" ? "◎" : ""}</span><small>#${esc(card.rawId)}</small>${card.wave ? "<i>〰</i>" : ""}</div>
+    <div class="card-body"><div class="card-title-line"><h3>${esc(card.zh)}</h3><b>${esc(score)}</b></div>${card.latinName ? `<small>${esc(card.latinName)}</small>` : card.zh !== card.name ? `<small>${esc(card.name)}</small>` : ""}<div class="tag-row">${(card.tags ?? []).slice(0, 3).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div><p>${esc(abilityText(card))}</p></div>
     <div class="card-footer"><strong>${esc(cost)}</strong><span>${esc(score)}</span>${card.type === "animal" ? `<b>格 ${card.aquarium || card.size}</b>` : ""}</div>
   </article>`;
 }
@@ -101,13 +140,13 @@ function renderLanding() {
         <div class="or-divider"><span>或者加入朋友</span></div><form class="join-form" id="join-form"><input id="join-code" aria-label="六位房間代碼或邀請連結" placeholder="房間代碼／邀請連結" value="${esc(state.joinCode)}"><button class="secondary-button" ${state.busy || !state.name.trim() || state.joinCode.length < 6 ? "disabled" : ""}>${state.busy === "join" ? "加入緊…" : "加入"}</button></form>
         ${state.error ? `<p class="form-error" role="alert">${esc(state.error)}</p>` : ""}<p class="privacy-note">毋須註冊。每個網絡每日最多開 5 間房；加入朋友房間不限。</p></div>`;
   app.innerHTML = `<main class="landing-shell">
-    <header class="topbar"><a class="brand" href="#top"><span class="brand-mark">OZ</span><span>OPEN ZOO <small>ONLINE</small></span></a><span class="build-badge">完整遊戲流程 · v1.0</span></header>
+    <header class="topbar"><a class="brand" href="#top"><span class="brand-mark">OZ</span><span>OPEN ZOO <small>ONLINE</small></span></a><span class="build-badge">卡牌及地圖校正版 · v1.1</span></header>
     <section class="hero" id="top">
       <div class="hero-copy"><p class="eyebrow">免費 · 開源 · 2–4 人即時連線</p><h1>一張連結，<br>開一間動物園。</h1><p class="hero-lede">繁體中文、基本版連 Marine Worlds。由揀起手牌、建造、動物、協會、贊助、休息收入，到兩條計分軌相遇，都喺瀏覽器完成。</p><div class="promise-row"><span><b>4</b> 位園長</span><span><b>296</b> 張牌索引</span><span><b>0</b> 蚊月費</span></div></div>
       ${entryPanel}
     </section>
     <section class="feature-deck"><article><span>01</span><h2>完整一局</h2><p>私人手牌、行動強度、圍欄容量、收入、保育計劃、最後一輪及終局排名。</p></article><article><span>02</span><h2>海洋世界</h2><p>大小水族館、海洋動物容量、礁居者連鎖、浪花展列及專科大學。</p></article><article><span>03</span><h2>伺服器判定</h2><p>每一步由伺服器驗證同保存；關頁後用同一部裝置及邀請連結重新入房。</p></article></section>
-    <section class="disclaimer"><strong>非官方開源愛好者版本</strong><p>介面及圖形全部重新設計，冇使用原版卡圖或商標。卡名只作辨認；能力資料採用可調校規則模型，方便之後逐張校正。</p></section>
+    <section class="disclaimer"><strong>非官方開源愛好者版本</strong><p>介面、動物分類插畫及地圖圖形全部重新設計，冇使用原版卡圖或商標。卡牌費用、圍欄、分數、圖標、條件及關鍵字已按公開卡表校正。</p></section>
     <footer><span>OPEN ZOO ONLINE</span><p>為朋友之間免費連線而製作</p></footer>
   </main>`;
   const name = document.querySelector("#host-name");
@@ -209,12 +248,21 @@ function bindRoomEvents() {
   document.querySelector("#modal-close")?.addEventListener("click", closeModal);
   document.querySelector("#detail-close")?.addEventListener("click", () => { state.detailCard = null; renderRoom(); });
   document.querySelectorAll("[data-modal-mode]").forEach((item) => item.addEventListener("click", () => updateModal({ mode: item.dataset.modalMode })));
-  document.querySelectorAll("[data-modal-task]").forEach((item) => item.addEventListener("click", () => updateModal({ task: item.dataset.modalTask })));
+  document.querySelectorAll("[data-modal-task]").forEach((item) => item.addEventListener("click", () => {
+    const task = item.dataset.modalTask;
+    const patch = { task };
+    if (task === "project") patch.target = state.room.state.projects[0]?.cardId ?? "";
+    updateModal(patch);
+  }));
   document.querySelectorAll("[data-modal-target]").forEach((item) => item.addEventListener("click", () => updateModal({ target: item.dataset.modalTarget })));
   document.querySelectorAll("[data-market-index]").forEach((item) => item.addEventListener("click", () => updateModal({ marketIndex: Number(item.dataset.marketIndex), mode: "snap" })));
   document.querySelectorAll("[data-structure]").forEach((item) => item.addEventListener("click", () => updateModal({ structure: item.dataset.structure })));
   document.querySelectorAll("[data-build-cell]").forEach((item) => item.addEventListener("click", () => updateModal({ cell: Number(item.dataset.buildCell) })));
   document.querySelectorAll("[data-pick-card]").forEach((item) => item.addEventListener("click", () => pickModalCard(item.dataset.pickCard)));
+  document.querySelector("#use-harbor")?.addEventListener("click", () => {
+    const cardId = document.querySelector("#harbor-card")?.value;
+    if (cardId) sendCommand({ type: "mapAbility", cardId }, false);
+  });
   document.querySelector("#x-spend")?.addEventListener("input", (event) => updateModal({ x: Number(event.target.value) }, false));
   document.querySelector("#submit-action")?.addEventListener("click", submitAction);
 }
@@ -259,7 +307,7 @@ function tableMarkup(data) {
     <section class="score-table">${players}</section>
     <section class="central-board"><div class="display-panel"><div class="section-title"><div><small>共用展列</small><h2>卡牌市場</h2></div><span>你嘅聲譽：${me.reputation}</span></div><div class="card-market">${market}</div></div>
       <div class="association-panel"><div class="section-title"><div><small>共用版圖</small><h2>保育計劃</h2></div><span>${me.workers - me.usedWorkers}/${me.workers} 人員可用</span></div><div class="project-row">${game.projects.map(projectMarkup).join("")}</div><div class="association-spaces"><span><b>2</b> 聲譽</span><span><b>3</b> 合作動物園</span><span><b>4</b> 大學</span><span><b>5</b> 保育計劃</span></div></div></section>
-    <section class="personal-area"><div class="zoo-panel"><div class="section-title"><div><small>${esc(mapInfo(me.mapId)?.name)}</small><h2>${esc(viewer()?.name)}嘅動物園</h2></div><span>${me.structures.length} 座設施 · ${me.playedAnimals.length} 隻動物</span></div>${zooMapMarkup(me)}<div class="resource-ribbon"><span><small>金錢</small><b>$${me.money}</b></span><span><small>魅力</small><b>${me.appeal}</b></span><span><small>保育</small><b>${me.conservation}</b></span><span><small>聲譽</small><b>${me.reputation}</b></span><span><small>X 標記</small><b>${me.xTokens}/5</b></span><span><small>終局目標</small><b>${target}</b></span></div></div>
+    <section class="personal-area"><div class="zoo-panel"><div class="section-title"><div><small>${esc(mapInfo(me.mapId)?.name)}</small><h2>${esc(viewer()?.name)}嘅動物園</h2></div><span>${me.structures.length} 座設施 · ${me.playedAnimals.length} 隻動物</span></div>${mapAbilityMarkup(me, game, myTurn)}${zooMapMarkup(me)}<div class="resource-ribbon"><span><small>金錢</small><b>$${me.money}</b></span><span><small>魅力</small><b>${me.appeal}</b></span><span><small>保育</small><b>${me.conservation}</b></span><span><small>聲譽</small><b>${me.reputation}</b></span><span><small>X 標記</small><b>${me.xTokens}/5</b></span><span><small>終局目標</small><b>${target}</b></span></div></div>
       <div class="collection-panel"><div class="mini-section"><h3>合作</h3><div class="chip-list">${[...me.partnerZoos, ...me.universities].length ? [...me.partnerZoos, ...me.universities].map((item) => `<span>${esc(item.replace("animal:", "專科："))}</span>`).join("") : "<small>尚未有合作單位</small>"}</div></div><div class="mini-section"><h3>已打出</h3><p><b>${me.playedAnimals.length}</b> 動物 · <b>${me.sponsors.length}</b> 贊助 · <b>${me.supportedProjects.length}</b> 支持</p><div class="tag-cloud">${Object.entries(me.tags).filter(([, count]) => count).slice(0, 9).map(([tag, count]) => `<span>${esc(tag)} ${count}</span>`).join("")}</div></div><div class="mini-section private-goals"><h3>私人終局牌</h3>${me.endgames.map((id) => `<button data-card-detail="${id}">#${id} ${esc(cardInfo(id)?.zh ?? id)}</button>`).join("")}</div></div></section>
     ${me.upgradeCredits > 0 ? upgradePanel(me) : ""}
     <section class="hand-section"><div class="section-title"><div><small>私人區域 · ${me.hand.length}/${me.handLimit} 張</small><h2>你嘅手牌</h2></div><span>休息時會自動棄至手牌上限</span></div><div class="hand-scroll">${hand}</div></section>
@@ -279,14 +327,29 @@ function zooMapMarkup(me, selectable = false) {
   const map = mapInfo(me.mapId);
   const structuresByCell = {};
   me.structures.forEach((structure) => structure.cells.forEach((cell, index) => { structuresByCell[cell] = { ...structure, anchor: index === 0 }; }));
-  const cells = Array.from({ length: 33 }, (_, cell) => {
+  const renderCell = (cell) => {
     const structure = structuresByCell[cell];
     const terrain = map?.water.includes(cell) ? "water" : map?.rock.includes(cell) ? "rock" : "";
+    const feature = map?.features?.[cell];
     const selected = selectable && state.modal?.cell === cell ? "selected" : "";
-    const content = structure?.anchor ? `<b>${esc(structure.label.replace("圍欄", "圍"))}</b><small>${structure.occupied || structure.used ? "使用中" : "空置"}</small>` : structure ? "" : terrain === "water" ? "≋" : terrain === "rock" ? "▲" : "";
-    return `<button class="hex ${terrain} ${structure ? `built build-${structure.type}` : ""} ${selected}" ${selectable && !structure ? `data-build-cell="${cell}"` : "disabled"}><span>${content}</span></button>`;
-  }).join("");
-  return `<div class="hex-map">${cells}</div>`;
+    const bonus = map?.bonuses?.[cell];
+    const content = structure?.anchor ? `<b>${esc(structure.label.replace("圍欄", "圍"))}</b><small>${structure.occupied || structure.used ? "使用中" : "空置"}</small>` : structure ? "" : terrain === "water" ? "≋" : terrain === "rock" ? "▲" : feature ? `<strong>${esc(feature)}</strong>` : bonus ? `<em>${esc(bonus)}</em>` : "";
+    const buildable = selectable && !structure && !terrain && !feature;
+    return `<button class="hex ${terrain} ${feature ? "feature" : ""} ${structure ? `built build-${structure.type}` : ""} ${selected}" ${buildable ? `data-build-cell="${cell}"` : "disabled"}><span>${content}</span></button>`;
+  };
+  let cell = 0;
+  const rows = [9, 10, 9, 10, 9, 10, 9, 10, 9, 10].map((amount, row) => `<div class="hex-row row-${row}">${Array.from({ length: amount }, () => renderCell(cell++)).join("")}</div>`).join("");
+  const projectBonuses = ["收入", "協會員", "聲譽", "X", "抽牌", "$5", "升級"].map((label, index) => `<span class="${index < me.supportedProjects.length ? "claimed" : ""}"><i>${index < me.supportedProjects.length ? "✓" : "■"}</i><small>${label}</small></span>`).join("");
+  return `<div class="zoo-board-frame"><aside class="project-bonus-strip"><b>保育獎勵</b>${projectBonuses}</aside><div class="hex-map" aria-label="${esc(map?.name ?? "動物園地圖")}">${rows}</div><aside class="building-key"><b>建築</b><span>⬡ 圍欄<br><small>1–5 格</small></span><span>▣ 親親動物園<br><small>3 格</small></span><span>⌂ 爬蟲館／鳥舍<br><small>5 格</small></span><span>● 亭店／涼亭<br><small>1 格</small></span></aside></div>`;
+}
+
+function mapAbilityMarkup(me, game, myTurn) {
+  const map = mapInfo(me.mapId);
+  if (!map) return "";
+  const harbor = map.ability?.key === "COMMERCIAL_HARBOR";
+  const options = me.hand.map((id) => `<option value="${esc(id)}">#${esc(id)} ${esc(cardInfo(id)?.zh ?? id)}</option>`).join("");
+  const control = harbor ? `<label class="harbor-control"><select id="harbor-card" aria-label="選擇要棄除嘅手牌">${options || "<option>冇手牌</option>"}</select><button id="use-harbor" ${!myTurn || !me.hand.length || me.harborUsedTurn === (game.turn ?? 0) ? "disabled" : ""}>棄牌換 $3</button></label>` : "";
+  return `<div class="map-ability-panel"><span><b>${esc(map.name)}</b><small>${esc(map.note)}</small></span>${control}</div>`;
 }
 
 function actionCardMarkup(id, strength, me, enabled) {
@@ -316,7 +379,9 @@ function logDrawer(data) {
 function openAction(actionId) {
   const me = viewerState();
   if (!me || state.room.state.currentPlayerId !== state.room.viewerId) return;
-  const firstFree = Array.from({ length: 33 }, (_, index) => index).find((cell) => !me.structures.some((structure) => structure.cells.includes(cell))) ?? 0;
+  const map = mapInfo(me.mapId);
+  const blocked = new Set([...(map?.water ?? []), ...(map?.rock ?? []), ...Object.keys(map?.features ?? {}).map(Number), ...me.structures.flatMap((structure) => structure.cells)]);
+  const firstFree = Array.from({ length: 95 }, (_, index) => index).find((cell) => !blocked.has(cell)) ?? 0;
   const defaults = {
     cards: { mode: "draw", marketIndex: 0 }, build: { structure: "enclosure1", cell: firstFree },
     animals: { selected: [] }, sponsors: { mode: "break", selected: [] }, association: { task: "reputation", target: "非洲" },
@@ -396,7 +461,11 @@ function associationModal(me, strength) {
   let choices = "";
   if (task === "partnerZoo") choices = targetChoices(["非洲", "亞洲", "美洲", "歐洲", "澳洲"]);
   if (task === "university") choices = targetChoices(["hand", "research", "reputation", ...(state.room.room.marineWorlds ? ["animal:肉食", "animal:草食", "animal:靈長", "animal:爬蟲", "animal:鳥類", "animal:海洋"] : [])], { hand: "手牌上限 5", research: "2 科研標記", reputation: "聲譽 +2" });
-  if (task === "project") choices = `<div class="target-grid">${state.room.state.projects.map((entry) => { const card = cardInfo(entry.cardId); return `<button class="target-choice ${state.modal.target === entry.cardId ? "selected" : ""}" data-modal-target="${entry.cardId}"><strong>${esc(card?.zh)}</strong><small>${esc(abilityText(card))}</small></button>`; }).join("")}</div>`;
+  if (task === "project") {
+    const active = state.room.state.projects.map((entry) => ({ card: cardInfo(entry.cardId), note: entry.base === false ? "已打出保育計劃" : "基礎保育計劃" }));
+    const fromHand = me.hand.map(cardInfo).filter((card) => card?.type === "project" && card.thresholds?.length && !state.room.state.projects.some((entry) => entry.cardId === card.rawId)).map((card) => ({ card, note: "由手牌打出並立即支持" }));
+    choices = `<div class="target-grid">${[...active, ...fromHand].map(({ card, note }) => `<button class="target-choice ${state.modal.target === card?.rawId ? "selected" : ""}" data-modal-target="${card?.rawId}"><strong>${esc(card?.zh)}</strong><small>${esc(note)} · ${esc(abilityText(card))}</small></button>`).join("")}</div>`;
+  }
   if (task === "donation") choices = `<div class="rule-callout"><b>捐款換取 1 保育分</b><p>費用由 $2 起，每次你再捐款就增加 $2，上限 $12。</p></div>`;
   return `<div class="task-grid">${tasks.map(([id, label, note]) => `<button class="task-choice ${task === id ? "selected" : ""}" data-modal-task="${id}"><span>${note}</span><strong>${label}</strong></button>`).join("")}</div>${choices}<p class="modal-hint">可用協會人員：${me.workers - me.usedWorkers}/${me.workers}。同一項工作每個休息週期只可做一次。</p>`;
 }
@@ -408,8 +477,9 @@ function targetChoices(values, labels = {}) {
 function detailModal() {
   const card = cardInfo(state.detailCard);
   if (!card) return "";
-  const facts = card.type === "animal" ? `<li><span>費用</span><b>$${card.cost}</b></li><li><span>圍欄</span><b>${card.aquarium ? `水族館 ${card.aquarium}` : `${card.size} 格`}</b></li><li><span>魅力</span><b>${card.appeal}</b></li><li><span>保育</span><b>${card.conservation}</b></li>` : card.type === "sponsor" ? `<li><span>強度</span><b>${card.level}</b></li><li><span>收入</span><b>${card.income}</b></li><li><span>魅力</span><b>${card.appeal}</b></li>` : "";
-  return `<div class="modal-scrim detail-scrim"><section class="detail-modal"><button id="detail-close">×</button><div class="detail-card-stage">${cardMarkup(card)}</div><div class="detail-copy"><p class="eyebrow">${typeName(card)} · #${card.rawId}</p><h2>${esc(card.zh)}</h2><small>${esc(card.name)}</small><ul>${facts}</ul><div class="detail-effect"><strong>能力摘要</strong><p>${esc(abilityText(card))}</p></div>${card.expansion === "marine" ? `<span class="marine-label">〰 Marine Worlds</span>` : ""}<p class="data-note">此版本使用重新設計圖形及可調校能力資料；不含原版卡圖。</p></div></section></div>`;
+  const facts = card.type === "animal" ? `<li><span>費用</span><b>$${card.cost}</b></li><li><span>圍欄</span><b>${card.aquarium ? `水族館 ${card.aquarium}` : `${card.size} 格`}</b></li><li><span>魅力</span><b>${card.appeal}</b></li><li><span>保育</span><b>${card.conservation}</b></li><li><span>岩石／水域</span><b>${card.rock}/${card.water}</b></li><li><span>最低聲譽</span><b>${card.reputation || "—"}</b></li>` : card.type === "sponsor" ? `<li><span>強度</span><b>${card.level}</b></li><li><span>效果</span><b>${card.effects?.length ?? 0} 項</b></li><li><span>魅力</span><b>${card.appeal}</b></li><li><span>保育</span><b>${card.conservation}</b></li>` : "";
+  const requirements = card.requirements?.length ? `<div class="detail-effect requirements"><strong>打出條件</strong><p>${card.requirements.map(esc).join(" · ")}</p></div>` : "";
+  return `<div class="modal-scrim detail-scrim"><section class="detail-modal"><button id="detail-close">×</button><div class="detail-card-stage">${cardMarkup(card)}</div><div class="detail-copy"><p class="eyebrow">${typeName(card)} · #${card.rawId}</p><h2>${esc(card.zh)}</h2><small>${esc(card.latinName || card.name)}</small><ul>${facts}</ul>${requirements}<div class="detail-effect"><strong>能力摘要</strong><p>${esc(abilityText(card))}</p></div>${card.expansion === "marine" ? `<span class="marine-label">〰 Marine Worlds</span>` : ""}<p class="data-note">費用、圍欄、圖標、條件、魅力、保育及關鍵字已按卡牌資料校正；插畫為本項目原創分類圖，不含原版卡圖。</p></div></section></div>`;
 }
 
 function toggleSetupCard(cardId) {
