@@ -1,3 +1,5 @@
+import { ANIMAL_FACTS, ENDGAME_FACTS, PROJECT_FACTS, SPONSOR_FACTS } from "./card-facts.js";
+
 const animals = `
 401|Cheetah
 402|Lion
@@ -328,21 +330,19 @@ export const ACTIONS = [
 ];
 
 export const MAPS = [
-  { id: "A", name: "地圖 A", note: "入門：完成建造獎勵較寬鬆", water: [2, 9, 19], rock: [6, 14, 22] },
-  { id: "0", name: "地圖 0", note: "標準：適合熟習基本流程", water: [3, 12, 21], rock: [7, 16, 25] },
-  { id: "1", name: "地圖 1", note: "商業動物園：亭店收入較強", water: [4, 13, 24], rock: [8, 17, 26] },
-  { id: "2", name: "地圖 2", note: "科研動物園：大學路線較快", water: [2, 11, 20], rock: [5, 15, 27] },
-  { id: "3", name: "地圖 3", note: "銀湖：水邊建築有額外空間", water: [1, 2, 10, 19], rock: [14, 25] },
-  { id: "4", name: "地圖 4", note: "好萊塢山：贊助牌有額外回報", water: [5, 14, 23], rock: [3, 12, 21] },
-  { id: "5", name: "地圖 5", note: "公園食肆：連接建築收入較高", water: [7, 16, 25], rock: [4, 13, 22] },
-  { id: "6", name: "地圖 6", note: "研究院：科研標記推進路線", water: [0, 9, 18], rock: [8, 17, 26] },
-  { id: "7", name: "地圖 7", note: "冰淇淋店：小型建築獎勵", water: [6, 15, 24], rock: [2, 11, 20] },
-  { id: "8", name: "地圖 8", note: "港口：海洋世界專用優勢", water: [1, 10, 19, 28], rock: [7, 17, 26] },
+  { id: "A", name: "地圖 A · 入門", note: "入門面：開局已有一個空置 3 格標準圍欄", water: [13, 14, 23, 24, 61, 62, 71, 72], rock: [2, 3, 20, 28, 57, 66, 83, 93], bonuses: { 10: "$5", 26: "X", 40: "聲譽", 52: "抽牌", 64: "$5", 80: "X" }, features: {} },
+  { id: "0", name: "地圖 0 · 標準", note: "標準面：較多放置獎勵，冇額外地圖能力", water: [16, 17, 25, 35, 59, 60, 69, 79], rock: [1, 11, 30, 38, 55, 74, 84, 92], bonuses: { 8: "$5", 21: "X", 33: "聲譽", 45: "抽牌", 58: "$5", 70: "協會員", 87: "保育" }, features: {} },
+  { id: "1", name: "地圖 1 · 觀測塔", note: "觀測塔旁嘅標準圍欄翻到已佔用面時，取得 2 魅力", water: [43, 44, 52, 53, 54, 61, 62, 70, 71, 79, 88], rock: [2, 3, 12, 13, 21, 22, 58, 67, 77, 78, 89], bonuses: { 10: "X", 26: "抽牌", 49: "$5", 64: "建造 II", 73: "$5", 81: "X", 91: "X" }, features: { 40: "觀測塔" }, ability: { key: "OBSERVATION_TOWER", cell: 40 } },
+  { id: "2", name: "地圖 2 · 戶外區域", note: "與入口相鄰嘅每個標準圍欄，容量增加 2", water: [6, 15, 25, 26, 55, 65, 74, 75], rock: [1, 10, 19, 37, 47, 66, 84, 93], bonuses: { 12: "$5", 29: "X", 43: "聲譽", 59: "抽牌", 72: "$5", 88: "保育" }, features: { 77: "戶外入口" }, ability: { key: "OUTDOOR_AREAS", cell: 77 } },
+  { id: "3", name: "地圖 3 · 銀湖", note: "銀湖四周設有較高價值嘅放置獎勵", water: [31, 32, 40, 41, 42, 49, 50, 51, 52, 59, 60, 61], rock: [3, 13, 22, 70, 79, 89], bonuses: { 10: "$5", 26: "$5", 37: "X", 46: "$5", 57: "聲譽", 66: "$5", 74: "抽牌", 86: "保育" }, features: {} },
+  { id: "4", name: "地圖 4 · 商業港口", note: "連接港口後，每回合一次可棄 1 張手牌換取 $3", water: [7, 16, 17, 26, 35, 44, 53, 62, 71], rock: [2, 11, 29, 47, 65, 83, 92], bonuses: { 14: "$5", 24: "X", 39: "聲譽", 56: "抽牌", 68: "$5", 80: "保育" }, features: { 48: "商業港口" }, ability: { key: "COMMERCIAL_HARBOR", cell: 48 } },
+  { id: "5", name: "地圖 5 · 公園餐廳", note: "收入：餐廳每個相鄰而且已覆蓋嘅格取得 $1", water: [5, 14, 24, 33, 63, 72, 82, 91], rock: [1, 20, 29, 46, 57, 75, 84], bonuses: { 11: "$5", 27: "X", 39: "聲譽", 55: "抽牌", 69: "$5", 87: "保育" }, features: { 50: "公園餐廳" }, ability: { key: "PARK_RESTAURANT", cell: 50 } },
+  { id: "6", name: "地圖 6 · 研究院", note: "連接研究院後，每次打出動物可忽略 1 個條件", water: [8, 17, 27, 36, 58, 67, 77, 86], rock: [3, 12, 21, 39, 56, 65, 83, 93], bonuses: { 10: "$5", 25: "X", 42: "聲譽", 52: "抽牌", 72: "$5", 89: "保育" }, features: { 48: "研究院" }, ability: { key: "RESEARCH_INSTITUTE", cell: 48 } },
+  { id: "7", name: "地圖 7 · 雪糕店", note: "覆蓋全部雪糕店後，每間亭店額外提供 $1 收入", water: [4, 13, 23, 32, 62, 71, 81, 90], rock: [8, 17, 36, 47, 57, 74, 84], bonuses: { 11: "$5", 28: "雪糕", 41: "X", 54: "雪糕", 68: "聲譽", 79: "雪糕", 88: "保育" }, features: {}, ability: { key: "ICE_CREAM_PARLORS", cells: [28, 54, 79] } },
+  { id: "8", name: "地圖 8 · 荷里活山", note: "覆蓋 H 可抽 1 張贊助牌；全部覆蓋後贊助牌強度減 1", water: [6, 15, 25, 34, 64, 73, 83, 92], rock: [2, 11, 30, 38, 56, 75, 85], bonuses: { 13: "H", 27: "$5", 43: "H", 59: "X", 70: "H", 82: "聲譽", 89: "保育" }, features: {}, ability: { key: "HOLLYWOOD_HILLS", cells: [13, 43, 70] } },
 ];
 
-const continents = ["非洲", "亞洲", "美洲", "歐洲", "澳洲"];
 const animalKinds = ["肉食", "草食", "靈長", "爬蟲", "鳥類"];
-const abilities = ["money", "draw", "appeal", "reputation", "x", "break", "conservation"];
 
 function parse(text) {
   return text.trim().split("\n").map((line) => {
@@ -351,104 +351,76 @@ function parse(text) {
   });
 }
 
-function seed(id, salt = 0) {
-  let value = (Number(id) * 2654435761 + salt * 2246822519) >>> 0;
-  value ^= value >>> 13;
-  return value >>> 0;
-}
+const kindTags = ["肉食", "草食", "靈長", "爬蟲", "鳥類", "萌寵", "海洋"];
+const continentTags = ["非洲", "亞洲", "美洲", "歐洲", "澳洲"];
+const projectRows = Object.fromEntries(parse(projects).map((row) => [row.rawId, row]));
 
-function animalKind(id) {
-  if (id >= 529 && id <= 554) return "海洋";
-  if (id >= 519 && id <= 528) return "家畜";
-  if (id >= 494) return "鳥類";
-  if (id >= 469) return "爬蟲";
-  if (id >= 451) return "靈長";
-  if (id >= 426) return "草食";
-  return "肉食";
-}
-
-function animalContinent(id) {
-  const grouped = [
-    [401, 405, "非洲"], [406, 410, "亞洲"], [411, 415, "美洲"], [416, 420, "歐洲"], [421, 425, "澳洲"],
-    [426, 430, "非洲"], [431, 435, "亞洲"], [436, 440, "美洲"], [441, 445, "歐洲"], [446, 450, "澳洲"],
-    [469, 473, "非洲"], [474, 478, "亞洲"], [479, 483, "美洲"], [484, 488, "歐洲"], [489, 493, "澳洲"],
-    [494, 498, "非洲"], [499, 503, "亞洲"], [504, 508, "美洲"], [509, 513, "歐洲"], [514, 518, "澳洲"],
-    [519, 526, "歐洲"], [527, 528, "澳洲"],
-  ];
-  const match = grouped.find(([start, end]) => id >= start && id <= end);
-  if (match) return match[2];
-  if (id >= 451 && id <= 455) return id === 451 ? "亞洲" : "非洲";
-  if (id >= 456 && id <= 457) return "非洲";
-  if (id >= 458 && id <= 462) return "亞洲";
-  if (id >= 463 && id <= 468) return "美洲";
-  if (id >= 529 && id <= 554) return continents[seed(id, 2) % continents.length];
-  return continents[seed(id, 2) % continents.length];
-}
-
-function animalCard(row) {
-  const marine = row.id >= 529 && row.id <= 554;
-  const promo = row.id >= 555;
-  const kind = animalKind(row.id);
-  const continent = animalContinent(row.id);
-  const size = 1 + (seed(row.id, 1) % 5);
-  const aquarium = marine ? 1 + (seed(row.id, 9) % 4) : 0;
-  const conservation = seed(row.id, 5) % 5 === 0 ? 1 : 0;
-  const ability = abilities[seed(row.id, 6) % abilities.length];
+function animalCard(fact) {
+  const aquarium = fact.specialEnclosures.find((entry) => entry.type === "Aquarium")?.capacity ?? 0;
   return {
-    ...row, type: "animal", expansion: promo ? "promo" : marine ? "marine" : "base", kind,
-    continent, size,
-    cost: 6 + (seed(row.id, 3) % 27), appeal: 2 + (seed(row.id, 4) % 11), conservation,
-    reputation: seed(row.id, 7) % 10 === 0 ? 6 + (seed(row.id, 8) % 7) : 0,
-    aquarium, reef: marine && seed(row.id, 10) % 2 === 0, wave: marine,
-    tags: marine ? ["海洋"] : [kind, continent],
-    ability, abilityValue: 1 + (seed(row.id, 11) % 3),
+    rawId: fact.id, id: Number(fact.id), name: fact.name, zh: fact.zh, latinName: fact.latinName,
+    type: "animal", expansion: fact.source, kind: fact.tags.find((tag) => kindTags.includes(tag)) ?? "動物",
+    continent: fact.tags.find((tag) => continentTags.includes(tag)) ?? "",
+    size: fact.size, cost: fact.cost, appeal: fact.appeal, conservation: fact.conservation,
+    reputation: fact.reputation, rock: fact.rock, water: fact.water, aquarium,
+    reef: fact.reefEffects.length > 0, wave: fact.wave, tags: fact.tags, requirements: fact.requirements,
+    abilities: fact.abilities, reefEffects: fact.reefEffects, specialEnclosures: fact.specialEnclosures,
+    standardEnclosure: fact.standardEnclosure, verified: true,
   };
 }
 
-function sponsorCard(row) {
-  const marine = row.id >= 265;
-  const ability = abilities[seed(row.id, 15) % abilities.length];
+function sponsorCard(fact) {
   return {
-    ...row, type: "sponsor", expansion: marine ? "marine" : "base", level: 1 + (seed(row.id, 12) % 5),
-    income: seed(row.id, 13) % 3, appeal: seed(row.id, 14) % 3, ability,
-    abilityValue: 1 + (seed(row.id, 16) % 3), wave: marine && seed(row.id, 17) % 3 === 0,
-    tags: marine ? ["贊助", "海洋"] : ["贊助", seed(row.id, 18) % 2 ? "科研" : "建築"],
+    rawId: fact.id, id: Number(fact.id), name: fact.name, zh: fact.zh,
+    type: "sponsor", expansion: fact.source, level: fact.level, income: 0,
+    appeal: fact.appeal, conservation: fact.conservation, reputation: fact.reputation,
+    rock: fact.rock, water: fact.water, tags: ["贊助", ...fact.tags], requirements: fact.requirements,
+    effects: fact.effects, human: fact.human, wave: false, verified: true,
   };
 }
 
-function projectCard(row) {
-  const marine = row.id >= 128;
-  const key = row.zh;
-  return {
-    ...row, type: "project", expansion: marine ? "marine" : "base", key,
-    thresholds: [2 + (seed(row.id, 20) % 2), 4 + (seed(row.id, 21) % 2), 6 + (seed(row.id, 22) % 2)],
-    points: [2, 3, 4], tags: ["保育計劃", key],
-  };
+function projectCard(fact) {
+  const row = projectRows[fact.id] ?? { rawId: fact.id, id: Number(fact.id), name: fact.name, zh: fact.zh };
+  return { ...row, name: fact.name, zh: fact.zh, type: "project", expansion: fact.source,
+    key: fact.tag || fact.zh, thresholds: fact.thresholds, points: fact.points,
+    tags: ["保育計劃", fact.tag || fact.zh], verified: true };
 }
 
-function endgameCard(row) {
-  return { ...row, type: "endgame", expansion: row.id >= 12 ? "marine" : "base", tags: ["終局計分"], max: 4 };
+function unresolvedProjectCard(row) {
+  return { ...row, type: "project", expansion: "marine", key: row.zh,
+    thresholds: [], points: [], tags: ["保育計劃", row.zh], verified: false };
 }
+
+function endgameCard(fact) {
+  return { rawId: fact.id, id: Number(fact.id), name: fact.name, zh: fact.zh,
+    type: "endgame", expansion: fact.source, tags: ["終局計分"], scores: fact.scores, max: 4, verified: true };
+}
+
+const unresolvedProjects = parse(projects).filter((row) => !PROJECT_FACTS.some((fact) => fact.id === row.rawId));
 
 export const CARDS = [
-  ...parse(animals).map(animalCard),
-  ...parse(sponsors).map(sponsorCard),
-  ...parse(projects).map(projectCard),
-  ...parse(endgames).map(endgameCard),
+  ...ANIMAL_FACTS.filter((fact) => Number(fact.id) >= 401).map(animalCard),
+  ...SPONSOR_FACTS.filter((fact) => Number(fact.id) >= 201 && Number(fact.id) <= 280).map(sponsorCard),
+  ...PROJECT_FACTS.map(projectCard),
+  ...unresolvedProjects.map(unresolvedProjectCard),
+  ...ENDGAME_FACTS.map(endgameCard),
 ];
 
 export const CARD_BY_ID = Object.fromEntries(CARDS.map((card) => [card.rawId, card]));
 
 export function publicCatalog() {
-  return { version: 2, cards: CARDS, actions: ACTIONS, maps: MAPS };
+  return { version: 3, cards: CARDS, actions: ACTIONS, maps: MAPS };
 }
 
 export function deckIds(marineWorlds) {
-  return CARDS.filter((card) => (card.type === "animal" || card.type === "sponsor") && card.expansion !== "promo" && (marineWorlds || card.expansion === "base")).map((card) => card.rawId);
+  return CARDS.filter((card) => {
+    const zooCard = card.type === "animal" || card.type === "sponsor" || card.type === "project" && card.category === "normal";
+    return zooCard && card.expansion !== "promo" && card.verified !== false && (marineWorlds || card.expansion === "base");
+  }).map((card) => card.rawId);
 }
 
 export function projectIds(marineWorlds) {
-  return CARDS.filter((card) => card.type === "project" && (marineWorlds || card.expansion === "base")).map((card) => card.rawId);
+  return CARDS.filter((card) => card.type === "project" && card.category === "base" && card.verified && (marineWorlds || card.expansion === "base")).map((card) => card.rawId);
 }
 
 export function endgameIds(marineWorlds) {
@@ -457,9 +429,11 @@ export function endgameIds(marineWorlds) {
 
 export function projectProgress(card, player) {
   if (!card || card.type !== "project") return 0;
-  if (card.rawId === "101") return Object.values(player.tags ?? {}).filter(Boolean).length;
-  if (card.rawId === "102") return new Set(player.structures.map((item) => item.type)).size;
-  const token = card.zh.replace(/計劃|管理|繁育|動物|類/g, "").trim();
+  if (card.rawId === "101") return ["肉食", "草食", "靈長", "爬蟲", "鳥類"].filter((tag) => (player.tags[tag] ?? 0) > 0).length;
+  if (card.rawId === "102") return ["非洲", "美洲", "澳洲", "亞洲", "歐洲"].filter((tag) => (player.tags[tag] ?? 0) > 0).length;
+  if (card.rawId === "130") return player.playedAnimals.filter((id) => (CARD_BY_ID[id]?.size ?? 99) <= 2).length;
+  if (card.rawId === "131") return player.playedAnimals.filter((id) => (CARD_BY_ID[id]?.size ?? 0) >= 4).length;
+  const token = card.key || card.zh.replace(/計劃|管理|繁育|動物|類/g, "").trim();
   if (["非洲", "美洲", "澳洲", "亞洲", "歐洲"].includes(token)) return player.tags[token] ?? 0;
   if (token.includes("海洋") || token.includes("水域")) return player.tags["海洋"] ?? 0;
   if (token.includes("科研")) return player.tags["科研"] ?? 0;
